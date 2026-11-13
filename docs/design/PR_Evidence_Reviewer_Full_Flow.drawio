@@ -1,0 +1,238 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" agent="PR Evidence Reviewer architecture" version="24.7.17" type="device">
+  <diagram id="01" name="01 - Original PR-link workflow">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="2110" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="boundary" value="" style="rounded=1;arcSize=2;fillColor=#F8FAFC;strokeColor=#CBD5E1;dashed=1;dashPattern=8 5;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="85" y="150" width="1630" height="1860" />
+        </mxCell>
+        <mxCell id="title" value="PR Evidence Reviewer | Original project flow" style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=34;fontColor=#0F172A;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="35" width="1610" height="45" />
+        </mxCell>
+        <mxCell id="subtitle" value="Initial concept: submit a PR link, check its claims against GitHub evidence, and review the findings" style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=19;fontColor=#475569;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="88" width="1610" height="45" />
+        </mxCell>
+        <mxCell id="caption0" value="DEVELOPER INPUT → GITHUB EVIDENCE → MODEL ASSESSMENT → HUMAN REVIEW" style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=18;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="155" width="1500" height="38" />
+        </mxCell>
+        <mxCell id="caption1" value="Four-week MVP: Python backend PRs in one repository. Inspect available evidence; code analysis cannot prove all runtime behavior." style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=18;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="2020" width="1610" height="55" />
+        </mxCell>
+        <mxCell id="launch" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;01  Submit a GitHub PR link&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Developer opens the web app and pastes the URL.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="220" width="480" height="80" />
+        </mxCell>
+        <mxCell id="input" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;02  Validate the review request&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Parse repository owner, name, and PR number.&lt;br&gt;Check accessibility and supported MVP scope.&lt;br&gt;Return a clear error if the PR cannot be read.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="340" width="480" height="120" />
+        </mxCell>
+        <mxCell id="snapshot" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;03  Identify the reviewed version&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Capture base/head commit IDs and PR text.&lt;br&gt;Associate all findings with that snapshot.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="505" width="480" height="100" />
+        </mxCell>
+        <mxCell id="diff" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;04  Fetch the GitHub evidence&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;PR title/body, changed files, and relevant source.&lt;br&gt;Retrieve available test code and CI results.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#ECFDF5;strokeColor=#10B981;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="650" width="480" height="100" />
+        </mxCell>
+        <mxCell id="claims" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;05a  Extract checkable claims&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;LLM splits the PR description into discrete claims.&lt;br&gt;Retain the original wording for traceability.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F3E8FF;strokeColor=#A855F7;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="110" y="800" width="470" height="110" />
+        </mxCell>
+        <mxCell id="index" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;05b  Locate supporting evidence&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Inspect Python changes and surrounding code.&lt;br&gt;Identify relevant tests and their available results.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#ECFDF5;strokeColor=#10B981;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1220" y="800" width="470" height="110" />
+        </mxCell>
+        <mxCell id="packets" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;06  Match evidence to each claim&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Assemble relevant code, tests, and CI evidence.&lt;br&gt;Include file/line references and context gaps.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#ECFDF5;strokeColor=#10B981;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="965" width="480" height="110" />
+        </mxCell>
+        <mxCell id="assess" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;07  Assess each claim with the LLM&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Compare what the PR says with the evidence.&lt;br&gt;Return a verdict, explanation, and citations.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F3E8FF;strokeColor=#A855F7;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="1120" width="480" height="100" />
+        </mxCell>
+        <mxCell id="validate" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;08  Check the generated findings&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Validate structured output and source references.&lt;br&gt;Flag missing evidence or unverifiable citations.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="1265" width="480" height="100" />
+        </mxCell>
+        <mxCell id="classify" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;09  Assign evidence-based verdicts&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Supported / contradicted / insufficient evidence.&lt;br&gt;Scope conclusions to the inspected material.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFF7ED;strokeColor=#F59E0B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="1410" width="480" height="110" />
+        </mxCell>
+        <mxCell id="report" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;10  Present the review report&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Show claims, verdicts, explanations, and citations.&lt;br&gt;Highlight missing tests and suggested edge cases.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#ECFDF5;strokeColor=#10B981;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="1600" width="480" height="110" />
+        </mxCell>
+        <mxCell id="human" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;11  Developer reviews the findings&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Inspect cited code and decide what to verify.&lt;br&gt;Human judgment controls PR approval.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="1755" width="480" height="100" />
+        </mxCell>
+        <mxCell id="save" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;12  Retain the review result&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Save report, reviewed commits, and feedback.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="660" y="1900" width="480" height="80" />
+        </mxCell>
+        <mxCell id="iterate" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Revise the PR and review again&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Author updates code, tests, or description.&lt;br&gt;Submit a new review for the updated version.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="110" y="1755" width="470" height="100" />
+        </mxCell>
+        <mxCell id="limits" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;What the verdict means&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Supported: inspected evidence backs the claim.&lt;br&gt;Contradicted: inspected evidence conflicts.&lt;br&gt;Insufficient: relevant evidence is unavailable.&lt;br&gt;&lt;br&gt;An existing test is not proof it ran.&lt;br&gt;Passing tests cover only tested scenarios.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="110" y="1410" width="470" height="220" />
+        </mxCell>
+        <mxCell id="failures" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Coverage and failure handling&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Unavailable code or CI: record the evidence gap.&lt;br&gt;Oversized PR: show a scope limitation.&lt;br&gt;Model/API error: report analysis failure.&lt;br&gt;Do not present missing evidence as approval.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1220" y="1120" width="470" height="180" />
+        </mxCell>
+        <mxCell id="eval" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Evaluation during development&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Manually label claims from sample Python PRs.&lt;br&gt;Keep evaluation PRs separate from tuning PRs.&lt;br&gt;Measure agreement, unsupported claims caught,&lt;br&gt;false reassurance, and developer review time.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1220" y="1410" width="470" height="190" />
+        </mxCell>
+        <mxCell id="edge0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="launch" target="input">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="input" target="snapshot">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="snapshot" target="diff">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge3" value="PR description" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.0;exitY=0.5;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="diff" target="claims">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="345" y="700" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge4" value="Code + test evidence" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=1.0;exitY=0.5;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="diff" target="index">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="1455" y="700" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="claims" target="packets">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="345" y="1020" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=1.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="index" target="packets">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="1455" y="1020" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="packets" target="assess">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="assess" target="validate">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="validate" target="classify">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="classify" target="report">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="report" target="human">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge12" value="Keep report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="human" target="save">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge13" value="Revise" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.0;exitY=0.5;entryX=1.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="human" target="iterate">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge14" value="New review" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.0;exitY=0.5;entryX=0.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;dashed=1;" edge="1" parent="1" source="iterate" target="input">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="65" y="1805" />
+              <mxPoint x="65" y="400" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="02" name="02 - Original application architecture">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1450" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="boundary" value="" style="rounded=1;arcSize=2;fillColor=#F8FAFC;strokeColor=#CBD5E1;dashed=1;dashPattern=8 5;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="85" y="150" width="1630" height="870" />
+        </mxCell>
+        <mxCell id="title" value="PR Evidence Reviewer | Original architecture" style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=34;fontColor=#0F172A;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="35" width="1610" height="45" />
+        </mxCell>
+        <mxCell id="subtitle" value="PR-link web application backed by GitHub retrieval, model-based assessment, and evidence reports" style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=19;fontColor=#475569;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="88" width="1610" height="45" />
+        </mxCell>
+        <mxCell id="caption0" value="PROPOSED COMPONENTS  /  GITHUB-LINK INPUT IS THE CORE WORKFLOW" style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=18;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="170" width="1500" height="38" />
+        </mxCell>
+        <mxCell id="caption1" value="IMPLEMENTATION NOTES  |  Suggested stack and evaluation details support the original concept; provider choices remain open." style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=18;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="1040" width="1610" height="65" />
+        </mxCell>
+        <mxCell id="caption2" value="Core product: submit a PR link → inspect implementation and test evidence → receive cited findings → make a human review decision." style="text;html=0;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=18;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="95" y="1360" width="1610" height="55" />
+        </mxCell>
+        <mxCell id="ui" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Web frontend&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;PR-link submission&lt;br&gt;Analysis progress&lt;br&gt;Claim-by-claim report and source links&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#EFF6FF;strokeColor=#3B82F6;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="120" y="260" width="420" height="120" />
+        </mxCell>
+        <mxCell id="api" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Python API / job coordinator&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Validate request; capture PR version.&lt;br&gt;Start analysis and return job status.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="680" y="260" width="440" height="120" />
+        </mxCell>
+        <mxCell id="history" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Review report storage&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;PR URL and reviewed commit IDs&lt;br&gt;Claims, verdicts, citations, and gaps&lt;br&gt;Analysis status and reviewer feedback&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1260" y="260" width="420" height="120" />
+        </mxCell>
+        <mxCell id="git" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;GitHub API&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;PR title, description, and changed files&lt;br&gt;Source files at the reviewed commits&lt;br&gt;Relevant test files and available CI results&lt;br&gt;Read access appropriate to the repository&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#ECFDF5;strokeColor=#10B981;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="120" y="540" width="420" height="140" />
+        </mxCell>
+        <mxCell id="collector" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Evidence retrieval and preparation&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Fetch relevant Python code and tests.&lt;br&gt;Separate source facts from PR claims.&lt;br&gt;Build evidence packets with references.&lt;br&gt;Track missing or unavailable material.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#ECFDF5;strokeColor=#10B981;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="680" y="540" width="440" height="140" />
+        </mxCell>
+        <mxCell id="runtime" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;LLM service / model API&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Extract discrete claims from PR text.&lt;br&gt;Assess claims using supplied evidence.&lt;br&gt;Return structured judgments and citations.&lt;br&gt;Model choice is an implementation decision.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F3E8FF;strokeColor=#A855F7;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1260" y="540" width="420" height="140" />
+        </mxCell>
+        <mxCell id="pipeline" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Claim assessment and validation&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Coordinate claim extraction and assessment.&lt;br&gt;Validate output format and cited locations.&lt;br&gt;Produce supported / contradicted /&lt;br&gt;insufficient-evidence findings.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="680" y="810" width="440" height="150" />
+        </mxCell>
+        <mxCell id="results" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Evidence provenance&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Preserve paths, lines, and commit IDs.&lt;br&gt;Distinguish test source from test execution.&lt;br&gt;Tie CI results to commits when available.&lt;br&gt;Surface missing evidence in the report.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="120" y="810" width="420" height="150" />
+        </mxCell>
+        <mxCell id="privacy" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Human review boundary&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Developer inspects findings and sources.&lt;br&gt;Suggested edge cases guide verification.&lt;br&gt;Evidence supports a scoped assessment.&lt;br&gt;PR approval remains a human decision.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#CBD5E1;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1260" y="810" width="420" height="150" />
+        </mxCell>
+        <mxCell id="scope" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;MVP scope&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;One repository; Python backend changes.&lt;br&gt;Manual analysis triggered by PR URL.&lt;br&gt;Available code and test evidence.&lt;br&gt;Report shown in the application.&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="120" y="1160" width="420" height="150" />
+        </mxCell>
+        <mxCell id="stack" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Suggested implementation stack&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;React/TypeScript web frontend&lt;br&gt;FastAPI backend and analysis worker&lt;br&gt;GitHub REST API + Python code inspection&lt;br&gt;LLM API + lightweight report database&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="680" y="1160" width="440" height="150" />
+        </mxCell>
+        <mxCell id="evaluation" value="&lt;b&gt;&lt;font style=&quot;font-size:20px&quot;&gt;Success measures&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:17px&quot;&gt;Agreement with manually labeled claims&lt;br&gt;Unsupported claims correctly identified&lt;br&gt;Incorrectly supported claims&lt;br&gt;Review time compared with manual review&lt;/font&gt;" style="html=1;whiteSpace=wrap;fontFamily=Arial;fontSize=17;fontColor=#0F172A;fillColor=#FFFFFF;strokeColor=#94A3B8;strokeWidth=1.6;verticalAlign=middle;rounded=1;arcSize=12;align=left;spacingLeft=18;spacingRight=14;spacingTop=8;spacingBottom=8;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1260" y="1160" width="420" height="150" />
+        </mxCell>
+        <mxCell id="edge0" value="PR URL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=1.0;exitY=0.5;entryX=0.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="ui" target="api">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge1" value="Status / report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=1.0;exitY=0.5;entryX=0.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="api" target="history">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge2" value="Review job" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="api" target="collector">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge3" value="PR data + code" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=1.0;exitY=0.5;entryX=0.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="git" target="collector">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge4" value="Evidence packets" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1.0;entryX=0.5;entryY=0.0;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="collector" target="pipeline">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="edge5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=1.0;exitY=0.3;entryX=0.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="pipeline" target="runtime">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="1175" y="855" />
+              <mxPoint x="1175" y="610" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge6" value="Report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#64748B;strokeWidth=1.8;fontSize=16;fontColor=#475569;labelBackgroundColor=#FFFFFF;exitX=1.0;exitY=0.7666666666666667;entryX=1.0;entryY=0.5;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="pipeline" target="history">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="1180" y="925" />
+              <mxPoint x="1180" y="995" />
+              <mxPoint x="1715" y="995" />
+              <mxPoint x="1715" y="320" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

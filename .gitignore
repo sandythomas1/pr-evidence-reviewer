@@ -1,0 +1,47 @@
+# --- Private evaluation data: NEVER commit -------------------------------------------
+# Labeled PRs from private repositories (and anything copied from them) live here.
+# Move a case to evals/public/ only after the source repository is public.
+evals/private/
+evals/**/private/
+*.private.*
+
+# --- Secrets and local runner state --------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+ai_keys.json
+.reviewer/
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Python --------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# --- Node / frontend -----------------------------------------------------------------
+node_modules/
+.next/
+web/dist/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Editors / OS / agents -----------------------------------------------------------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.claude/settings.local.json
