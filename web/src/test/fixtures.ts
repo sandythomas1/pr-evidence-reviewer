@@ -1,4 +1,4 @@
-import type { PullRequestSnapshot } from "../types";
+import type { ClaimSet, PullRequestSnapshot } from "../types";
 
 export const HEAD_SHA = "a".repeat(40);
 export const BASE_SHA = "b".repeat(40);
@@ -39,6 +39,31 @@ export function makeSnapshot(overrides: Partial<PullRequestSnapshot> = {}): Pull
       { name: "deploy-preview", source: "status", status: "pending", conclusion: null, url: null },
     ],
     scope_limitations: [],
+    ...overrides,
+  };
+}
+
+export function makeClaimSet(overrides: Partial<ClaimSet> = {}): ClaimSet {
+  return {
+    claims: [
+      {
+        id: "c1",
+        quote: "Retries failed uploads three times.",
+        statement: "A failed upload is retried up to three times.",
+        kind: "behavior",
+      },
+      {
+        id: "c2",
+        quote: "Adds a unit test for the retry loop.",
+        statement: "A unit test covers the retry loop.",
+        kind: "test",
+      },
+    ],
+    dropped_count: 0,
+    notes: [],
+    scope_limitations: [],
+    provider: "claude_code",
+    model: "claude-opus-5-5",
     ...overrides,
   };
 }

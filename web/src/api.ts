@@ -1,4 +1,4 @@
-import type { PullRequestSnapshot } from "./types";
+import type { ClaimsResponse, PullRequestSnapshot } from "./types";
 
 /** An API failure whose message is safe and useful to show the user. */
 export class ApiError extends Error {
@@ -23,16 +23,13 @@ function errorDetail(body: unknown): { code: string; message: string } | null {
   return message ? { code, message } : null;
 }
 
-export async function fetchSnapshot(
-  prUrl: string,
-  fetchImpl: typeof fetch = fetch,
-): Promise<PullRequestSnapshot> {
+async function postJson<T>(path: string, payload: unknown, fetchImpl: typeof fetch): Promise<T> {
   let response: Response;
   try {
-    response = await fetchImpl("/api/snapshots", {
+    response = await fetchImpl(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pr_url: prUrl }),
+      body: JSON.stringify(payload),
     });
   } catch {
     throw new ApiError(UNREACHABLE, "runner_unreachable");
@@ -49,5 +46,20 @@ export async function fetchSnapshot(
   if (body === null) {
     throw new ApiError("The runner sent back a reply that couldn't be read.", "bad_reply");
   }
-  return body as PullRequestSnapshot;
+  return body as T;
+}
+
+export function fetchSnapshot(
+  prUrl: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<PullRequestSnapshot> {
+  return postJson<PullRequestSnapshot>("/api/snapshots", { pr_url: prUrl }, fetchImpl);
+}
+
+/** Slower than fetchSnapshot: the runner asks the model to pull the claims out of the PR text. */
+export function fetchClaims(
+  prUrl: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ClaimsResponse> {
+  return postJson<ClaimsResponse>("/api/claims", { pr_url: prUrl }, fetchImpl);
 }

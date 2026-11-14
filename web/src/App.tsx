@@ -1,18 +1,23 @@
 import { useState } from "react";
-import { ApiError, fetchSnapshot } from "./api";
+import { ApiError, fetchClaims, fetchSnapshot } from "./api";
+import { ClaimsView, type ClaimsState } from "./components/ClaimsView";
 import { PrLinkForm } from "./components/PrLinkForm";
 import { SnapshotView } from "./components/SnapshotView";
-import type { PullRequestSnapshot } from "./types";
+import type { ClaimsResponse, PullRequestSnapshot } from "./types";
 
 type State =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "loaded"; snapshot: PullRequestSnapshot };
+  | { kind: "loaded"; snapshot: PullRequestSnapshot; claims: ClaimsState };
 
 interface Props {
   loadSnapshot?: (prUrl: string) => Promise<PullRequestSnapshot>;
+  loadClaims?: (prUrl: string) => Promise<ClaimsResponse>;
 }
+
+const errorMessage = (error: unknown) =>
+  error instanceof ApiError ? error.message : "Something went wrong. Try again.";
 
 function announcement(state: State): string {
   switch (state.kind) {
@@ -20,26 +25,50 @@ function announcement(state: State): string {
       return "Loading the pull request from GitHub…";
     case "loaded": {
       const { owner, repo, number } = state.snapshot.ref;
-      return `Loaded ${owner}/${repo} #${String(number)}.`;
+      const name = `${owner}/${repo} #${String(number)}`;
+      if (state.claims.kind === "loading") return `Loaded ${name}. Finding its claims…`;
+      if (state.claims.kind === "error") return `Loaded ${name}. Its claims couldn't be found.`;
+      const count = state.claims.claims.claims.length;
+      return `Loaded ${name}. Found ${String(count)} ${count === 1 ? "claim" : "claims"}.`;
     }
     default:
       return "";
   }
 }
 
-export function App({ loadSnapshot = fetchSnapshot }: Props) {
+export function App({ loadSnapshot = fetchSnapshot, loadClaims = fetchClaims }: Props) {
   const [state, setState] = useState<State>({ kind: "idle" });
 
   async function load(prUrl: string) {
     setState({ kind: "loading" });
+    let snapshot: PullRequestSnapshot;
     try {
-      setState({ kind: "loaded", snapshot: await loadSnapshot(prUrl) });
+      snapshot = await loadSnapshot(prUrl);
     } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : "Something went wrong. Try again.";
-      setState({ kind: "error", message });
+      setState({ kind: "error", message: errorMessage(error) });
+      return;
+    }
+    // Show the snapshot right away; the model step can take a minute.
+    setState({ kind: "loaded", snapshot, claims: { kind: "loading" } });
+    try {
+      const result = await loadClaims(prUrl);
+      // The claims were checked against this snapshot's text, so show the two together.
+      setState({
+        kind: "loaded",
+        snapshot: result.snapshot,
+        claims: { kind: "loaded", claims: result.claims },
+      });
+    } catch (error) {
+      setState({
+        kind: "loaded",
+        snapshot,
+        claims: { kind: "error", message: errorMessage(error) },
+      });
     }
   }
+
+  const busy =
+    state.kind === "loading" || (state.kind === "loaded" && state.claims.kind === "loading");
 
   return (
     <main>
@@ -49,7 +78,7 @@ export function App({ loadSnapshot = fetchSnapshot }: Props) {
         approval decision.
       </p>
       <PrLinkForm
-        busy={state.kind === "loading"}
+        busy={busy}
         onSubmit={(prUrl) => {
           void load(prUrl);
         }}
@@ -62,7 +91,12 @@ export function App({ loadSnapshot = fetchSnapshot }: Props) {
           {state.message}
         </div>
       )}
-      {state.kind === "loaded" && <SnapshotView snapshot={state.snapshot} />}
+      {state.kind === "loaded" && (
+        <>
+          <SnapshotView snapshot={state.snapshot} />
+          <ClaimsView state={state.claims} />
+        </>
+      )}
     </main>
   );
 }
