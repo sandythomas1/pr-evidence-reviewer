@@ -39,3 +39,27 @@ class GitHubRateLimitedError(ReviewerError):
 class GitHubUnavailableError(ReviewerError):
     code = "github_unavailable"
     http_status = 502
+
+
+class ProviderUnavailableError(ReviewerError):
+    """The model provider isn't installed, isn't signed in, or can't be started."""
+
+    code = "llm_unavailable"
+    http_status = 503
+
+
+class ProviderTimeoutError(ReviewerError):
+    code = "llm_timeout"
+    http_status = 504
+
+
+class ProviderInvalidOutputError(ReviewerError):
+    """The model's reply didn't match the schema. Never turned into a partial result."""
+
+    code = "llm_invalid_output"
+    http_status = 502
+
+
+class ProviderFailedError(ReviewerError):
+    code = "llm_failed"
+    http_status = 502
