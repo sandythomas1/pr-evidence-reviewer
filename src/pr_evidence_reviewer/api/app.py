@@ -5,8 +5,8 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 
 from pr_evidence_reviewer import __version__
+from pr_evidence_reviewer.api import claims, snapshots
 from pr_evidence_reviewer.api import providers as providers_api
-from pr_evidence_reviewer.api import snapshots
 from pr_evidence_reviewer.api.errors import install_error_handlers
 from pr_evidence_reviewer.api.web import install_security_headers, mount_web_ui
 from pr_evidence_reviewer.config import Settings
@@ -47,6 +47,7 @@ def create_app(
     install_error_handlers(app)
     app.include_router(_health_router())
     app.include_router(snapshots.router)
+    app.include_router(claims.router)
     app.include_router(providers_api.router)
     mount_web_ui(app, settings.web_dist)
     return app

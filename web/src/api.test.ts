@@ -1,5 +1,5 @@
-import { ApiError, fetchSnapshot } from "./api";
-import { makeSnapshot } from "./test/fixtures";
+import { ApiError, fetchClaims, fetchSnapshot } from "./api";
+import { makeClaimSet, makeSnapshot } from "./test/fixtures";
 
 const LINK = "https://github.com/octo-org/widgets/pull/42";
 
@@ -48,5 +48,30 @@ describe("fetchSnapshot", () => {
     const fetchImpl: typeof fetch = () => Promise.resolve(new Response("not json"));
 
     await expect(fetchSnapshot(LINK, fetchImpl)).rejects.toThrow(/couldn't be read/);
+  });
+});
+
+describe("fetchClaims", () => {
+  it("posts the link to the claims endpoint and returns the snapshot with its claims", async () => {
+    const reply = { snapshot: makeSnapshot(), claims: makeClaimSet() };
+    const fetchImpl = respond(200, reply);
+
+    await expect(fetchClaims(LINK, fetchImpl)).resolves.toEqual(reply);
+    expect(fetchImpl).toHaveBeenCalledWith("/api/claims", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pr_url: LINK }),
+    });
+  });
+
+  it("surfaces a model provider error from the envelope", async () => {
+    const fetchImpl = respond(503, {
+      error: { code: "llm_unavailable", message: "Claude Code isn't signed in." },
+    });
+
+    const error: unknown = await fetchClaims(LINK, fetchImpl).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("llm_unavailable");
   });
 });

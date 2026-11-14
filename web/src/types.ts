@@ -43,3 +43,28 @@ export interface PullRequestSnapshot {
   checks: CheckResult[];
   scope_limitations: string[];
 }
+
+/** Mirrors pr_evidence_reviewer.domain.claims. */
+export type ClaimKind =
+  "behavior" | "test" | "performance" | "security" | "refactor" | "docs" | "other";
+
+export interface Claim {
+  id: string;
+  quote: string;
+  statement: string;
+  kind: ClaimKind;
+}
+
+export interface ClaimSet {
+  claims: Claim[];
+  dropped_count: number;
+  notes: string[];
+  scope_limitations: string[];
+  provider: string | null;
+  model: string | null;
+}
+
+export interface ClaimsResponse {
+  snapshot: PullRequestSnapshot;
+  claims: ClaimSet;
+}
