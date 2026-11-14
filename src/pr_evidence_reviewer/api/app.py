@@ -1,11 +1,13 @@
 """FastAPI application factory."""
 
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 
 from pr_evidence_reviewer import __version__
 from pr_evidence_reviewer.api import snapshots
 from pr_evidence_reviewer.api.errors import install_error_handlers
+from pr_evidence_reviewer.api.web import install_security_headers, mount_web_ui
 from pr_evidence_reviewer.config import Settings
 from pr_evidence_reviewer.github.client import GitHubClient
 from pr_evidence_reviewer.github.token import GhCliTokenProvider
@@ -31,10 +33,14 @@ def create_app(
     snapshot_source: snapshots.SnapshotSource | None = None,
 ) -> FastAPI:
     """Build the app. Tests pass their own settings and dependencies."""
+    settings = settings or Settings()
     app = FastAPI(title="PR Evidence Reviewer", version=__version__)
-    app.state.settings = settings or Settings()
+    app.state.settings = settings
     app.state.snapshot_source = snapshot_source or GitHubClient(GhCliTokenProvider())
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+    install_security_headers(app)
     install_error_handlers(app)
     app.include_router(_health_router())
     app.include_router(snapshots.router)
+    mount_web_ui(app, settings.web_dist)
     return app
