@@ -38,6 +38,17 @@ as a gap, never as approval.
 Design: [`docs/design/PR_Evidence_Reviewer_Full_Flow.drawio`](docs/design/PR_Evidence_Reviewer_Full_Flow.drawio)
 · Decisions: [`docs/decisions/`](docs/decisions/)
 
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
+
+```sh
+uv sync                 # install the runner and dev tools
+uv run prev serve       # start on http://127.0.0.1:8765
+uv run pytest           # tests
+uv run ruff check . && uv run black --check . && uv run mypy
+```
+
 ## Contributing
 
 Work happens on feature branches, which are merged into `dev` through pull requests. `dev` is promoted to
