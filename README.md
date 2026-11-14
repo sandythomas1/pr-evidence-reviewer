@@ -40,14 +40,28 @@ Design: [`docs/design/PR_Evidence_Reviewer_Full_Flow.drawio`](docs/design/PR_Evi
 
 ## Development
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
+Requires [uv](https://docs.astral.sh/uv/), Python 3.12+, Node 24, and a signed-in [GitHub CLI](https://cli.github.com/) (`gh auth login`).
 
 ```sh
 uv sync                 # install the runner and dev tools
-uv run prev serve       # start on http://127.0.0.1:8765
-uv run pytest           # tests
-uv run ruff check . && uv run black --check . && uv run mypy
+npm --prefix web ci     # install the web UI's tools
+npm --prefix web run build
+uv run prev serve       # open http://127.0.0.1:8765
 ```
+
+Checks:
+
+```sh
+uv run pytest
+uv run ruff check . && uv run black --check . && uv run mypy
+npm --prefix web run lint && npm --prefix web test
+```
+
+For UI work, run `uv run prev serve` in one terminal and `npm --prefix web run dev` in another. Vite
+serves the UI with hot reload and forwards `/api` to the runner.
+
+The runner only answers requests addressed to `localhost`, `127.0.0.1`, or `[::1]`, so a web page can't
+reach it through DNS rebinding.
 
 ## Contributing
 

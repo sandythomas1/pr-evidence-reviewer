@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from pr_evidence_reviewer.api.app import create_app
 from pr_evidence_reviewer.errors import GitHubAuthError
 from pr_evidence_reviewer.github.client import GitHubClient
+from tests.client import local_client
 from tests.fakes import HEAD_SHA, TOKEN, FakeGitHub
 
 
@@ -15,7 +16,7 @@ def fake() -> FakeGitHub:
 @pytest.fixture
 def client(fake: FakeGitHub) -> TestClient:
     github = GitHubClient(lambda: TOKEN, transport=fake.transport())
-    return TestClient(create_app(snapshot_source=github), raise_server_exceptions=False)
+    return local_client(create_app(snapshot_source=github), raise_server_exceptions=False)
 
 
 def test_returns_the_snapshot_for_a_pr_link(client: TestClient) -> None:
@@ -51,7 +52,7 @@ def test_signed_out_gh_is_a_401_with_a_fix(fake: FakeGitHub) -> None:
 
     app = create_app(snapshot_source=GitHubClient(signed_out, transport=fake.transport()))
 
-    response = TestClient(app).post(
+    response = local_client(app).post(
         "/api/snapshots", json={"pr_url": "https://github.com/acme/shop/pull/7"}
     )
 
@@ -65,7 +66,7 @@ def test_unexpected_errors_hide_internals(fake: FakeGitHub) -> None:
         async def fetch_snapshot(self, _: object) -> object:
             raise RuntimeError(f"secret detail {TOKEN}")
 
-    client = TestClient(create_app(snapshot_source=Broken()), raise_server_exceptions=False)  # type: ignore[arg-type]
+    client = local_client(create_app(snapshot_source=Broken()), raise_server_exceptions=False)  # type: ignore[arg-type]
 
     response = client.post("/api/snapshots", json={"pr_url": "https://github.com/acme/shop/pull/7"})
 
