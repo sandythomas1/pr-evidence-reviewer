@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.115,<1",
     "uvicorn>=0.32,<1",
     "pydantic>=2.9,<3",
+    "httpx>=0.28,<1",
 ]
 
 [project.scripts]
@@ -18,7 +19,6 @@ prev = "pr_evidence_reviewer.cli:main"
 [dependency-groups]
 dev = [
     "pytest>=8.3,<9",
-    "httpx>=0.28,<1",
     "ruff>=0.8",
     "black>=24.10",
     "mypy>=1.13",
