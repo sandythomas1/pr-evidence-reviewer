@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from pr_evidence_reviewer.domain.claims import Claim
+from pr_evidence_reviewer.domain.pull_request import PullRequestSnapshot
 from pr_evidence_reviewer.domain.verdicts import AssessmentOutput, CheckCitation, DiffCitation
 from pr_evidence_reviewer.errors import (
     ProviderFailedError,
@@ -18,7 +19,7 @@ from pr_evidence_reviewer.review.verdicts import (
     ClaimAssessor,
 )
 from tests.llm.fakes import FakeProvider
-from tests.review.builders import HEAD_SHA, TEST_PATCH, changed_file, snapshot
+from tests.review.builders import HEAD_SHA, TEST_PATCH, changed_file, check, snapshot
 
 pytestmark = pytest.mark.anyio
 
@@ -390,6 +391,7 @@ async def test_a_budget_cut_is_a_scope_limitation_and_cut_lines_cannot_be_cited(
     assert result.verdicts[0].status == "insufficient_evidence"
     assert result.verdicts[0].dropped_citations == 1
     assert result.verdicts[1].status == "supported"
+    assert result.verdicts[1].notes == ["Some changes weren't checked, so this may be incomplete."]
 
 
 async def test_logs_count_what_was_dropped_but_never_the_text(
@@ -421,3 +423,157 @@ def test_the_reply_schema_works_with_strict_structured_output() -> None:
         assert item["additionalProperties"] is False
         assert sorted(item["required"]) == sorted(item["properties"])
         assert all("default" not in prop for prop in item["properties"].values())
+
+
+def one_check(name: str = "tests", **fields: Any) -> PullRequestSnapshot:
+    return snapshot(checks=[check(name, **fields)])
+
+
+@pytest.mark.parametrize(
+    ("status", "conclusion"),
+    [
+        ("in_progress", None),
+        ("completed", None),
+        ("completed", "failure"),
+        ("completed", "skipped"),
+    ],
+)
+async def test_a_check_that_has_not_passed_cannot_support_a_claim_on_its_own(
+    status: str, conclusion: str | None
+) -> None:
+    reply = {"assessments": [assessment("c1", check_citations=["tests"])]}
+    claim_assessor, _ = assessor(reply)
+
+    result = await claim_assessor.assess(
+        one_check(status=status, conclusion=conclusion), CLAIMS[:1]
+    )
+
+    verdict = result.verdicts[0]
+    assert verdict.status == "insufficient_evidence"
+    assert verdict.citations == [
+        CheckCitation(name="tests", source="check_run", status=status, conclusion=conclusion)
+    ]
+    assert verdict.notes == [
+        "The cited check hasn't passed, so it can't support this claim. It's marked as "
+        "insufficient evidence."
+    ]
+
+
+async def test_a_check_that_passed_cannot_contradict_a_claim_on_its_own() -> None:
+    reply = {"assessments": [assessment("c1", verdict="contradicted", check_citations=["tests"])]}
+    claim_assessor, _ = assessor(reply)
+
+    result = await claim_assessor.assess(one_check(), CLAIMS[:1])
+
+    verdict = result.verdicts[0]
+    assert verdict.status == "insufficient_evidence"
+    assert len(verdict.citations) == 1
+    assert verdict.notes == [
+        "The cited check didn't fail, so it can't contradict this claim. It's marked as "
+        "insufficient evidence."
+    ]
+
+
+@pytest.mark.parametrize(
+    ("verdict", "fields"),
+    [
+        ("supported", {"conclusion": "success"}),
+        ("supported", {"conclusion": "success", "source": "status"}),
+        ("contradicted", {"conclusion": "failure"}),
+        ("contradicted", {"conclusion": "error", "source": "status"}),
+    ],
+)
+async def test_a_finished_check_with_the_matching_result_keeps_the_verdict(
+    verdict: str, fields: dict[str, Any]
+) -> None:
+    reply = {"assessments": [assessment("c1", verdict=verdict, check_citations=["tests"])]}
+    claim_assessor, _ = assessor(reply)
+
+    result = await claim_assessor.assess(one_check(**fields), CLAIMS[:1])
+
+    assert result.verdicts[0].status == verdict
+    assert result.verdicts[0].notes == []
+
+
+async def test_a_diff_citation_still_counts_next_to_a_failed_check() -> None:
+    reply = {
+        "assessments": [
+            assessment(
+                "c1", diff_citations=[diff("src/upload.py", 2, 3)], check_citations=["tests"]
+            )
+        ]
+    }
+    claim_assessor, _ = assessor(reply)
+
+    result = await claim_assessor.assess(one_check(conclusion="failure"), CLAIMS[:1])
+
+    assert result.verdicts[0].status == "supported"
+    assert len(result.verdicts[0].citations) == 2
+
+
+async def test_a_supported_verdict_says_it_may_be_incomplete_when_changes_were_not_checked() -> (
+    None
+):
+    padding = "\n".join(
+        f"@@ -{n * 100 + 1},0 +{n * 100 + 1},5 @@\n"
+        + "\n".join(f"+padding {n}.{m}" for m in range(5))
+        for n in range(50)
+    )
+    files = [changed_file("a/padding.py", patch=padding), changed_file("src/upload.py")]
+    reply = {
+        "assessments": [
+            assessment("c1", diff_citations=[diff("src/upload.py", 2, 3)]),
+            assessment("c2", verdict="insufficient_evidence"),
+        ]
+    }
+    claim_assessor, _ = assessor(reply, max_diff_chars=2_000)
+
+    result = await claim_assessor.assess(snapshot(files=files), CLAIMS)
+
+    supported, unsure = result.verdicts
+    assert supported.status == "supported"
+    assert supported.notes == ["Some changes weren't checked, so this may be incomplete."]
+    assert unsure.notes == []
+
+
+async def test_checks_cited_from_a_pr_that_changes_its_own_ci_are_flagged() -> None:
+    files = [changed_file("src/upload.py"), changed_file(".github/workflows/ci.yml")]
+    reply = {
+        "assessments": [
+            assessment("c1", check_citations=["tests"]),
+            assessment("c2", diff_citations=[diff("src/upload.py", 2)]),
+        ]
+    }
+    claim_assessor, _ = assessor(reply)
+
+    result = await claim_assessor.assess(snapshot(files=files), CLAIMS)
+
+    by_check, by_diff = result.verdicts
+    assert by_check.status == "supported"
+    assert by_check.notes == [
+        "This pull request changes its own CI setup, so its checks may not be independent "
+        "evidence."
+    ]
+    assert by_diff.notes == []
+    assert result.scope_limitations == [
+        "This pull request changes its own CI setup, so its CI checks may not be independent "
+        "evidence."
+    ]
+
+
+async def test_claims_past_the_total_budget_are_not_sent_and_marked_analysis_failed() -> None:
+    reply = {"assessments": [assessment("c1", diff_citations=[diff("src/upload.py", 2)])]}
+    claim_assessor, provider = assessor(reply, max_claims_chars=100)
+
+    result = await claim_assessor.assess(snapshot(), CLAIMS)
+
+    sent = provider.requests[0].user_content
+    assert '"id": "c1"' in sent
+    assert '"id": "c2"' not in sent
+    assert [verdict.status for verdict in result.verdicts] == ["supported", "analysis_failed"]
+    assert result.verdicts[1].notes == [
+        "The claims are too long to check in one review, so this one wasn't checked."
+    ]
+    assert result.scope_limitations == [
+        "The claims are too long to check in one review. Not checked: 1 claim."
+    ]

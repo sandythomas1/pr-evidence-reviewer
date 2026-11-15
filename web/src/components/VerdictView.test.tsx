@@ -102,6 +102,13 @@ describe("ClaimVerdictView", () => {
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 
+  it("shows a status it doesn't know as analysis failed instead of crashing", () => {
+    const verdict = firstVerdict({ status: "approved" as ClaimVerdict["status"] });
+    render(<ClaimVerdictView verdict={verdict} repo={REPO} headSha={HEAD_SHA} />);
+
+    expect(screen.getByText("Analysis failed")).toBeInTheDocument();
+  });
+
   it("shows model text as text, never as markup", () => {
     const verdict = firstVerdict({ explanation: "<img src=x onerror=alert(1)>" });
     const { container } = render(

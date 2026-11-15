@@ -136,6 +136,7 @@ def test_a_claim_with_an_invented_quote_is_rejected() -> None:
         [{**CLAIMS[0], "id": ""}],
         [{**CLAIMS[0], "id": "c" * 11}],
         [{**CLAIMS[0], "statement": "x" * 2_001}],
+        [{**CLAIMS[0], "quote": "x" * 20_001}],
         [{**CLAIMS[0], "kind": "approved"}],
         [{**CLAIMS[0], "id": f"c{n}"} for n in range(51)],
     ],

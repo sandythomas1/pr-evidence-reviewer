@@ -1,9 +1,13 @@
 """The evidence a first-pass verdict rests on: the snapshot's diff hunks and CI checks, nothing more.
 
-The packet is deterministic. Files are sorted by path and checks by name, so the same snapshot
-always renders to the same bytes. Every diff line that exists on the head side carries its line number, so
-the model can cite real lines. A character budget caps the diff; whatever is cut is named in a scope
-limitation and told to the model as a gap, so a missing file is never read as a missing change.
+The packet is deterministic. Files are sorted by path, with lockfiles and generated or vendored
+files last, and checks by name, so the same snapshot always renders to the same bytes. Every diff
+line that exists on the head side carries its line number, so the model can cite real lines.
+
+A character budget caps the diff. It's shared fairly: every file gets its first hunk before any file
+gets its second, so a long file early in the order can't push the real change out. Whatever is cut
+is named in a scope limitation and told to the model as a gap, so a missing file is never read as a
+missing change. The number of CI checks shown is capped the same way.
 
 The full evidence packet (#16) replaces this with checkout search, test mapping, and symbols.
 """
@@ -16,9 +20,26 @@ from dataclasses import dataclass, field
 from pr_evidence_reviewer.domain.pull_request import ChangedFile, CheckResult, PullRequestSnapshot
 
 MAX_DIFF_CHARS = 60_000
+MAX_CHECK_LINES = 200
 MAX_NAMED_FILES = 20
-_HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
+_HUNK_HEADER = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
 _GUTTER = 7
+
+# Files that rarely carry the change a claim is about. They get the diff budget last.
+_LOW_VALUE_NAMES = frozenset(
+    {"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "go.sum", "composer.lock"}
+)
+_LOW_VALUE_SUFFIXES = (".lock", ".min.js", ".min.css", ".map")
+_LOW_VALUE_DIRS = frozenset({"dist", "vendor", "node_modules"})
+
+# A pull request that edits these can change what its own CI checks test.
+_CI_CONFIG_PREFIXES = (".github/workflows/", ".circleci/")
+_CI_CONFIG_NAMES = frozenset(
+    {".gitlab-ci.yml", "azure-pipelines.yml", "azure-pipelines.yaml", "Jenkinsfile"}
+)
+CI_CONFIG_LIMITATION = (
+    "This pull request changes its own CI setup, so its CI checks may not be independent evidence."
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +48,8 @@ class EvidenceIndex:
 
     head_lines: dict[str, frozenset[int]] = field(default_factory=dict)
     checks: dict[str, tuple[CheckResult, ...]] = field(default_factory=dict)
+    # Paths as the model saw them (escaped), for the paths where that differs from the real path.
+    displayed_paths: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -34,6 +57,9 @@ class EvidencePacket:
     text: str
     index: EvidenceIndex
     scope_limitations: list[str]
+    # True when part of the diff or some CI checks were cut, so a verdict may miss something.
+    evidence_incomplete: bool = False
+    changes_ci_config: bool = False
 
 
 @dataclass(frozen=True)
@@ -42,21 +68,29 @@ class _Hunk:
     head_lines: frozenset[int]
 
 
+@dataclass
+class _FileDiff:
+    file: ChangedFile
+    header: str
+    hunks: list[_Hunk]
+    kept: list[bool]
+
+    def kept_hunks(self) -> list[_Hunk]:
+        return [hunk for hunk, kept in zip(self.hunks, self.kept, strict=True) if kept]
+
+
 def build_evidence(
-    snapshot: PullRequestSnapshot, max_diff_chars: int = MAX_DIFF_CHARS
+    snapshot: PullRequestSnapshot,
+    max_diff_chars: int = MAX_DIFF_CHARS,
+    max_check_lines: int = MAX_CHECK_LINES,
 ) -> EvidencePacket:
-    files = sorted(snapshot.files, key=lambda item: item.path)
-    checks = sorted(snapshot.checks, key=_check_order)
+    files = sorted(snapshot.files, key=lambda item: (is_low_value(item.path), item.path))
+    all_checks = sorted(snapshot.checks, key=_check_order)
+    checks = all_checks[:max_check_lines]
 
-    diff_blocks: list[str] = []
-    head_lines: dict[str, frozenset[int]] = {}
     gaps: list[str] = []
-    left_out: list[str] = []
-    partly_read: list[str] = []
-    used = 0
-
+    diffs: list[_FileDiff] = []
     for file in files:
-        header = _file_header(file)
         if file.patch is None:
             if file.additions or file.deletions:
                 gaps.append(f"No diff is available for {_inline(file.path)} (binary or too large).")
@@ -65,28 +99,32 @@ def build_evidence(
         if not hunks:
             gaps.append(f"The diff for {_inline(file.path)} couldn't be read.")
             continue
+        diffs.append(_FileDiff(file, _file_header(file), hunks, [False] * len(hunks)))
+    _share_budget(diffs, max_diff_chars)
 
-        kept: list[_Hunk] = []
-        cost = len(header) + 1
-        for hunk in hunks:
-            if used + cost + len(hunk.text) + 1 > max_diff_chars:
-                continue
-            kept.append(hunk)
-            cost += len(hunk.text) + 1
-        if not kept:
-            left_out.append(file.path)
-            continue
-        if len(kept) < len(hunks):
-            partly_read.append(file.path)
-        used += cost
-        diff_blocks.append("\n".join([header, *(hunk.text for hunk in kept)]))
-        head_lines[file.path] = frozenset(n for hunk in kept for n in hunk.head_lines)
-
+    shown = [diff for diff in diffs if any(diff.kept)]
+    left_out = [diff.file.path for diff in diffs if not any(diff.kept)]
+    partly_read = [diff.file.path for diff in shown if not all(diff.kept)]
     limitations = _budget_limitations(left_out, partly_read)
-    if not checks:
+    if len(all_checks) > len(checks):
+        limitations.append(
+            "There are too many CI checks to check them all. "
+            f"Not checked: {len(all_checks) - len(checks)} checks."
+        )
+    evidence_incomplete = bool(limitations)
+    changes_ci_config = any(_touches_ci_config(file) for file in snapshot.files)
+    if changes_ci_config:
+        limitations.append(CI_CONFIG_LIMITATION)
+    if not all_checks:
         gaps.append("No CI checks were reported for the head commit.")
     gaps.extend(snapshot.scope_limitations)
     gaps.extend(limitations)
+
+    diff_blocks = ["\n".join([d.header, *(h.text for h in d.kept_hunks())]) for d in shown]
+    head_lines = {
+        d.file.path: frozenset(n for h in d.kept_hunks() for n in h.head_lines) for d in shown
+    }
+    displayed = {_inline(path): path for path in head_lines if _inline(path) != path}
 
     text = "\n".join(
         [
@@ -107,8 +145,51 @@ def build_evidence(
     )
     return EvidencePacket(
         text=text,
-        index=EvidenceIndex(head_lines=head_lines, checks=_checks_by_name(checks)),
+        index=EvidenceIndex(
+            head_lines=head_lines, checks=_checks_by_name(checks), displayed_paths=displayed
+        ),
         scope_limitations=limitations,
+        evidence_incomplete=evidence_incomplete,
+        changes_ci_config=changes_ci_config,
+    )
+
+
+def _share_budget(diffs: list[_FileDiff], max_chars: int) -> None:
+    """Keep hunks round-robin: every file's first hunk, then every file's second, and so on.
+
+    A file's header is paid for with its first kept hunk. A hunk that doesn't fit is skipped, and a
+    later, smaller one may still fit.
+    """
+    used = 0
+    rounds = max((len(diff.hunks) for diff in diffs), default=0)
+    for position in range(rounds):
+        for diff in diffs:
+            if position >= len(diff.hunks):
+                continue
+            cost = len(diff.hunks[position].text) + 1
+            if not any(diff.kept):
+                cost += len(diff.header) + 1
+            if used + cost > max_chars:
+                continue
+            diff.kept[position] = True
+            used += cost
+
+
+def is_low_value(path: str) -> bool:
+    """Lockfiles and generated, minified, or vendored files: rarely where a claimed change is."""
+    *folders, name = path.split("/")
+    return (
+        name in _LOW_VALUE_NAMES
+        or name.endswith(_LOW_VALUE_SUFFIXES)
+        or any(folder in _LOW_VALUE_DIRS for folder in folders)
+    )
+
+
+def _touches_ci_config(file: ChangedFile) -> bool:
+    return any(
+        path.startswith(_CI_CONFIG_PREFIXES) or path.rsplit("/", 1)[-1] in _CI_CONFIG_NAMES
+        for path in (file.path, file.previous_path)
+        if path
     )
 
 
@@ -139,18 +220,30 @@ def _parse_hunks(patch: str) -> list[_Hunk]:
 
 
 def _render_hunk(header: re.Match[str], body: list[str]) -> _Hunk:
-    """Number every line that exists on the head side: context and added lines."""
-    next_line = int(header.group(1))
-    lines = [f"@@ +{next_line} @@{header.group(2)}"]
+    """Number every line that exists on the head side: context and added lines.
+
+    The header's line counts say how long the hunk is, so anything past them, such as the empty
+    string a trailing newline leaves, is not a line.
+    """
+    old_left = int(header.group(1) or 1)
+    next_line = int(header.group(2))
+    new_left = int(header.group(3) or 1)
+    lines = [f"@@ +{next_line} @@{header.group(4)}"]
     numbers: set[int] = set()
     for raw in body:
+        if old_left <= 0 and new_left <= 0:
+            break
         marker, content = (raw[0], raw[1:]) if raw else (" ", "")
         if marker == "-":
             lines.append(f"{'':>{_GUTTER}} - {content}")
-        elif marker in " +":
+            old_left -= 1
+        elif marker in " +" and new_left > 0:
             lines.append(f"{next_line:>{_GUTTER}} {marker} {content}")
             numbers.add(next_line)
             next_line += 1
+            new_left -= 1
+            if marker == " ":
+                old_left -= 1
     return _Hunk(text="\n".join(lines), head_lines=frozenset(numbers))
 
 

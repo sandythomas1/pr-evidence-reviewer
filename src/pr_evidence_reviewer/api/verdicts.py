@@ -1,7 +1,9 @@
 """POST /api/verdicts: a first-pass verdict for each claim, from the snapshot's diff and CI checks.
 
-The browser sends back the claims that /api/claims returned. They are not trusted: the snapshot is
-fetched again here, and every claim's quote must still appear in the pull request's text.
+The browser sends back the claims that /api/claims returned. The snapshot is fetched again here,
+and each claim's quote must still appear in the pull request's text. Only the quote is checked: the
+id, statement, and kind are bounded by the request schema but otherwise taken as sent, so they reach
+the model as untrusted data inside its boundary markers, never as instructions.
 """
 
 from fastapi import APIRouter, Request

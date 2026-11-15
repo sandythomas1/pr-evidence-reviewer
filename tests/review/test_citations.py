@@ -6,9 +6,9 @@ from pr_evidence_reviewer.domain.verdicts import (
     ProposedCheckCitation,
     ProposedDiffCitation,
 )
-from pr_evidence_reviewer.review.citations import SnapshotCitationChecker
+from pr_evidence_reviewer.review.citations import SnapshotCitationChecker, check_outcome
 from pr_evidence_reviewer.review.evidence import build_evidence
-from tests.review.builders import check, snapshot
+from tests.review.builders import changed_file, check, snapshot
 
 
 def checker() -> SnapshotCitationChecker:
@@ -67,3 +67,39 @@ def test_a_name_shared_by_two_checks_cites_both_results() -> None:
 @pytest.mark.parametrize("name", ["Tests", "test", "", "build"])
 def test_unknown_check_names_are_rejected(name: str) -> None:
     assert checker().check_ci(ProposedCheckCitation(name=name)) == []
+
+
+def test_a_path_cited_in_its_displayed_escaped_form_maps_back_to_the_real_path() -> None:
+    raw = 'docs/a\nb "c".py'
+    files = [changed_file(raw)]
+    index = build_evidence(snapshot(files=files)).index
+
+    cited = SnapshotCitationChecker(index).check_diff(
+        ProposedDiffCitation(path='docs/a\\nb \\"c\\".py', start_line=1, end_line=1)
+    )
+
+    assert cited == DiffCitation(path=raw, start_line=1, end_line=1)
+
+
+@pytest.mark.parametrize(
+    ("status", "conclusion", "outcome"),
+    [
+        ("completed", "success", "passed"),
+        ("completed", "failure", "failed"),
+        ("completed", "timed_out", "failed"),
+        ("completed", "cancelled", "failed"),
+        ("completed", "action_required", "failed"),
+        ("completed", "error", "failed"),
+        ("completed", "neutral", None),
+        ("completed", "skipped", None),
+        ("completed", None, None),
+        ("in_progress", None, None),
+        ("queued", "success", None),
+    ],
+)
+def test_a_check_result_is_decisive_only_when_it_finished_and_passed_or_failed(
+    status: str, conclusion: str | None, outcome: str | None
+) -> None:
+    citation = CheckCitation(name="t", source="check_run", status=status, conclusion=conclusion)
+
+    assert check_outcome(citation) == outcome

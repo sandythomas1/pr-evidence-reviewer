@@ -4,8 +4,10 @@ The claims and the evidence are untrusted: the author wrote the PR text, the cod
 and often the CI check names. They go to the model inside boundary markers that carry a random value
 the author can't predict, so nothing in them can close the block early. Every citation in the reply is
 checked against what the model was shown. Citations that don't check out are dropped and counted,
-never repaired. A supported or contradicted verdict left with no citation becomes insufficient
-evidence, and a claim the model skipped is marked analysis failed, never given a verdict.
+never repaired. A supported or contradicted verdict needs a decisive citation: a diff line, or a
+finished check whose result matches (passed to support, failed to contradict). Without one it becomes
+insufficient evidence. A claim the model skipped, or one past the claims budget, is marked analysis
+failed, never given a verdict.
 """
 
 import json
@@ -17,6 +19,7 @@ from pr_evidence_reviewer.domain.claims import Claim
 from pr_evidence_reviewer.domain.pull_request import PullRequestSnapshot
 from pr_evidence_reviewer.domain.verdicts import (
     AssessmentOutput,
+    CheckCitation,
     Citation,
     ClaimStatus,
     ClaimVerdict,
@@ -24,13 +27,29 @@ from pr_evidence_reviewer.domain.verdicts import (
     VerdictSet,
 )
 from pr_evidence_reviewer.llm.base import LLMProvider, StructuredRequest
-from pr_evidence_reviewer.review.citations import CitationChecker, SnapshotCitationChecker
-from pr_evidence_reviewer.review.evidence import MAX_DIFF_CHARS, build_evidence
+from pr_evidence_reviewer.review.citations import (
+    CitationChecker,
+    SnapshotCitationChecker,
+    check_outcome,
+)
+from pr_evidence_reviewer.review.evidence import MAX_DIFF_CHARS, EvidencePacket, build_evidence
 
 logger = logging.getLogger(__name__)
 
 SKIPPED_NOTE = "The model didn't return an assessment for this claim."
 NO_CLAIMS_NOTE = "There are no claims to check."
+NOT_SENT_NOTE = "The claims are too long to check in one review, so this one wasn't checked."
+INCOMPLETE_NOTE = "Some changes weren't checked, so this may be incomplete."
+CI_CONFIG_NOTE = (
+    "This pull request changes its own CI setup, so its checks may not be independent evidence."
+)
+
+# Total characters of claim statements and quotes sent in one model call. Above the largest single
+# claim the API accepts, so the first claim always fits.
+MAX_CLAIMS_CHARS = 40_000
+
+# The check result that can back each verdict on its own.
+_DECIDING_OUTCOME = {"supported": "passed", "contradicted": "failed"}
 
 SYSTEM_PROMPT = """\
 You check the claims a GitHub pull request makes against evidence from that pull request: its diff \
@@ -73,10 +92,12 @@ class ClaimAssessor:
         provider: LLMProvider,
         new_boundary: Callable[[], str] = lambda: secrets.token_hex(8),
         max_diff_chars: int = MAX_DIFF_CHARS,
+        max_claims_chars: int = MAX_CLAIMS_CHARS,
     ) -> None:
         self._provider = provider
         self._new_boundary = new_boundary
         self._max_diff_chars = max_diff_chars
+        self._max_claims_chars = max_claims_chars
 
     async def assess(self, snapshot: PullRequestSnapshot, claims: list[Claim]) -> VerdictSet:
         """One model call for all claims. Provider errors propagate; they are never a verdict."""
@@ -84,19 +105,29 @@ class ClaimAssessor:
             return VerdictSet(head_sha=snapshot.head.sha, verdicts=[], notes=[NO_CLAIMS_NOTE])
 
         packet = build_evidence(snapshot, self._max_diff_chars)
+        sent = _within_budget(claims, self._max_claims_chars)
         result = await self._provider.complete_structured(
             StructuredRequest(
                 system_prompt=SYSTEM_PROMPT,
-                user_content=wrap_untrusted(claims, packet.text, self._new_boundary()),
+                user_content=wrap_untrusted(sent, packet.text, self._new_boundary()),
                 output_type=AssessmentOutput,
             )
         )
 
-        verdicts, ignored = check_assessments(
-            result.output.assessments, claims, SnapshotCitationChecker(packet.index)
+        checked, ignored = check_assessments(
+            result.output.assessments, sent, SnapshotCitationChecker(packet.index)
         )
+        by_id = {verdict.claim_id: _with_packet_notes(verdict, packet) for verdict in checked}
+        verdicts = [by_id.get(claim.id) or _not_sent(claim.id) for claim in claims]
+        scope_limitations = list(packet.scope_limitations)
+        if len(sent) < len(claims):
+            unsent = len(claims) - len(sent)
+            scope_limitations.append(
+                "The claims are too long to check in one review. "
+                f"Not checked: {unsent} {'claim' if unsent == 1 else 'claims'}."
+            )
         dropped = sum(verdict.dropped_citations for verdict in verdicts)
-        skipped = sum(verdict.status == "analysis_failed" for verdict in verdicts)
+        skipped = sum(verdict.status == "analysis_failed" for verdict in checked)
         if dropped or ignored or skipped:
             logger.info(
                 "Checked the model's assessments",
@@ -108,10 +139,42 @@ class ClaimAssessor:
             verdicts=verdicts,
             dropped_citations=dropped,
             notes=_notes(dropped, ignored, skipped),
-            scope_limitations=packet.scope_limitations,
+            scope_limitations=scope_limitations,
             provider=result.provider,
             model=result.model,
         )
+
+
+def _within_budget(claims: list[Claim], max_chars: int) -> list[Claim]:
+    """The leading claims whose statements and quotes fit the budget together."""
+    sent: list[Claim] = []
+    used = 0
+    for claim in claims:
+        used += len(claim.statement) + len(claim.quote)
+        if used > max_chars:
+            break
+        sent.append(claim)
+    return sent
+
+
+def _not_sent(claim_id: str) -> ClaimVerdict:
+    return ClaimVerdict(
+        claim_id=claim_id,
+        status="analysis_failed",
+        explanation="",
+        citations=[],
+        notes=[NOT_SENT_NOTE],
+    )
+
+
+def _with_packet_notes(verdict: ClaimVerdict, packet: EvidencePacket) -> ClaimVerdict:
+    """Warnings that depend on the evidence as a whole rather than on one citation."""
+    notes = list(verdict.notes)
+    if verdict.status == "supported" and packet.evidence_incomplete:
+        notes.append(INCOMPLETE_NOTE)
+    if packet.changes_ci_config and any(isinstance(c, CheckCitation) for c in verdict.citations):
+        notes.append(CI_CONFIG_NOTE)
+    return verdict if notes == verdict.notes else verdict.model_copy(update={"notes": notes})
 
 
 def wrap_untrusted(claims: list[Claim], evidence: str, boundary: str) -> str:
@@ -184,6 +247,9 @@ def _verdict(
             "the diff or the CI checks, so it's marked as insufficient evidence."
         )
         status = "insufficient_evidence"
+    elif status != "insufficient_evidence" and not any(_decides(c, status) for c in citations):
+        notes.append(_indecisive_note(status, citations))
+        status = "insufficient_evidence"
     if dropped:
         notes.append(_dropped_note(dropped))
 
@@ -196,6 +262,29 @@ def _verdict(
         edge_cases=_non_empty(proposed.edge_cases),
         dropped_citations=dropped,
         notes=notes,
+    )
+
+
+def _decides(citation: Citation, status: ClaimStatus) -> bool:
+    """Whether this citation alone can back the verdict. Diff lines always can."""
+    if isinstance(citation, CheckCitation):
+        return check_outcome(citation) == _DECIDING_OUTCOME.get(status)
+    return True
+
+
+def _indecisive_note(status: ClaimStatus, citations: list[Citation]) -> str:
+    """Only check citations are left here, and none has the result the verdict needs."""
+    one = len(citations) == 1
+    if status == "supported":
+        subject = "The cited check hasn't" if one else "None of the cited checks has"
+        return (
+            f"{subject} passed, so {'it' if one else 'they'} can't support this claim. "
+            "It's marked as insufficient evidence."
+        )
+    subject = "The cited check didn't" if one else "None of the cited checks did"
+    return (
+        f"{subject} fail, so {'it' if one else 'they'} can't contradict this claim. "
+        "It's marked as insufficient evidence."
     )
 
 

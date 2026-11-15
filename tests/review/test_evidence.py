@@ -1,3 +1,5 @@
+import pytest
+
 from pr_evidence_reviewer.review.evidence import MAX_NAMED_FILES, build_evidence
 from tests.review.builders import HEAD_SHA, TEST_PATCH, changed_file, check, snapshot
 
@@ -162,3 +164,112 @@ def test_a_long_list_of_cut_files_names_the_first_ones_and_counts_the_rest() -> 
     assert f"f{MAX_NAMED_FILES - 1:02}.py, and 3 more." in limitation
     assert f"f{MAX_NAMED_FILES:02}.py" not in limitation
     assert packet.index.head_lines == {}
+
+
+def _hunks(count: int, lines_per_hunk: int) -> str:
+    return "\n".join(
+        f"@@ -{n * 100 + 1},0 +{n * 100 + 1},{lines_per_hunk} @@\n"
+        + "\n".join(f"+padding {n}.{m}" for m in range(lines_per_hunk))
+        for n in range(count)
+    )
+
+
+def test_every_file_gets_its_first_hunk_before_any_file_gets_a_second() -> None:
+    auth = "@@ -10,1 +10,2 @@\n context\n+    require_login()"
+    files = [
+        changed_file("a/padding.py", patch=_hunks(50, 5)),
+        changed_file("src/auth.py", patch=auth),
+    ]
+
+    packet = build_evidence(snapshot(files=files), max_diff_chars=2_000)
+
+    assert packet.index.head_lines["src/auth.py"] == frozenset({10, 11})
+    assert 1 in packet.index.head_lines["a/padding.py"]
+    assert packet.scope_limitations == [
+        "The diff is too long to check in full. Only some changes were checked in: a/padding.py."
+    ]
+    assert packet.evidence_incomplete
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "package-lock.json",
+        "web/pnpm-lock.yaml",
+        "yarn.lock",
+        "uv.lock",
+        "go.sum",
+        "static/app.min.js",
+        "dist/bundle.js",
+        "vendor/lib/x.go",
+        "web/node_modules/left-pad/index.js",
+    ],
+)
+def test_lockfiles_and_generated_files_are_checked_last(path: str) -> None:
+    files = [changed_file(path, patch=_hunks(1, 5)), changed_file("src/z.py", patch=_hunks(1, 5))]
+
+    packet = build_evidence(snapshot(files=files), max_diff_chars=250)
+
+    assert set(packet.index.head_lines) == {"src/z.py"}
+    assert packet.scope_limitations == [
+        f"The diff is too long to check in full. Not checked: {path}."
+    ]
+
+
+def test_a_trailing_newline_in_a_patch_is_not_a_line() -> None:
+    patch = "@@ -1,1 +1,2 @@\n context\n+added\n"
+
+    packet = build_evidence(snapshot(files=[changed_file("a.py", patch=patch)]))
+
+    assert packet.index.head_lines == {"a.py": frozenset({1, 2})}
+    assert "      3" not in packet.text
+
+
+def test_an_empty_context_line_inside_the_hunk_counts_until_the_header_is_used_up() -> None:
+    patch = "@@ -1,3 +1,3 @@\n one\n\n three\n\n"
+
+    packet = build_evidence(snapshot(files=[changed_file("a.py", patch=patch)]))
+
+    assert packet.index.head_lines == {"a.py": frozenset({1, 2, 3})}
+
+
+def test_only_so_many_ci_checks_are_shown_and_the_rest_are_named_as_a_gap() -> None:
+    checks = [check(f"job-{n:03}") for n in range(5)]
+
+    packet = build_evidence(snapshot(checks=checks), max_check_lines=3)
+
+    assert sorted(packet.index.checks) == ["job-000", "job-001", "job-002"]
+    assert "job-003" not in packet.text
+    assert packet.scope_limitations == [
+        "There are too many CI checks to check them all. Not checked: 2 checks."
+    ]
+    assert packet.evidence_incomplete
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".github/workflows/ci.yml",
+        ".gitlab-ci.yml",
+        ".circleci/config.yml",
+        "azure-pipelines.yml",
+        "build/Jenkinsfile",
+    ],
+)
+def test_a_change_to_the_ci_setup_is_a_scope_limitation(path: str) -> None:
+    files = [changed_file("src/upload.py"), changed_file(path)]
+
+    packet = build_evidence(snapshot(files=files))
+
+    assert packet.changes_ci_config
+    assert packet.scope_limitations == [
+        "This pull request changes its own CI setup, so its CI checks may not be independent "
+        "evidence."
+    ]
+    assert not packet.evidence_incomplete
+
+
+def test_an_unrelated_yaml_file_is_not_ci_setup() -> None:
+    packet = build_evidence(snapshot(files=[changed_file("config/app.yml")]))
+
+    assert not packet.changes_ci_config

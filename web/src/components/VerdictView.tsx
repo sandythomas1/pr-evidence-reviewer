@@ -29,7 +29,14 @@ export const STATUS_ORDER: ClaimStatus[] = [
   "analysis_failed",
 ];
 
-export const statusLabel = (status: ClaimStatus) => STATUS_DISPLAY[status].label;
+/** The runner may be newer than this page; a status it doesn't know shows as analysis failed. */
+function statusDisplay(status: ClaimStatus) {
+  return Object.hasOwn(STATUS_DISPLAY, status)
+    ? STATUS_DISPLAY[status]
+    : STATUS_DISPLAY.analysis_failed;
+}
+
+export const statusLabel = (status: ClaimStatus) => statusDisplay(status).label;
 
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
 // GitHub renders these as documents, where line anchors only work in the plain view.
@@ -55,7 +62,7 @@ function lineRange({ start_line: start, end_line: end }: DiffCitation) {
 }
 
 export function StatusBadge({ status }: { status: ClaimStatus }) {
-  const { label, icon, tone } = STATUS_DISPLAY[status];
+  const { label, icon, tone } = statusDisplay(status);
   return (
     <span className={`badge verdict-badge ${tone}`}>
       <span aria-hidden="true">{icon}</span> {label}
