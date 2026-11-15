@@ -1,4 +1,10 @@
-import type { ClaimsResponse, ProviderStatus, PullRequestSnapshot } from "./types";
+import type {
+  Claim,
+  ClaimsResponse,
+  ProviderStatus,
+  PullRequestSnapshot,
+  VerdictsResponse,
+} from "./types";
 
 /** An API failure whose message is safe and useful to show the user. */
 export class ApiError extends Error {
@@ -84,4 +90,13 @@ export function fetchClaims(
 ): Promise<ClaimsResponse> {
   const payload = providerId === null ? { pr_url: prUrl } : { pr_url: prUrl, provider: providerId };
   return postJson<ClaimsResponse>("/api/claims", payload, fetchImpl);
+}
+
+/** Slow too: the runner fetches the pull request again and asks the model to check each claim. */
+export function fetchVerdicts(
+  prUrl: string,
+  claims: Claim[],
+  fetchImpl: typeof fetch = fetch,
+): Promise<VerdictsResponse> {
+  return postJson<VerdictsResponse>("/api/verdicts", { pr_url: prUrl, claims }, fetchImpl);
 }

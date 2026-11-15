@@ -1,4 +1,4 @@
-import type { ClaimSet, ProviderStatus, PullRequestSnapshot } from "../types";
+import type { ClaimSet, ProviderStatus, PullRequestSnapshot, VerdictSet } from "../types";
 
 export const HEAD_SHA = "a".repeat(40);
 export const BASE_SHA = "b".repeat(40);
@@ -91,4 +91,49 @@ export function makeProviders(): ProviderStatus[] {
         "send to improve its products, so avoid it for private repositories.",
     },
   ];
+}
+
+export function makeVerdictSet(overrides: Partial<VerdictSet> = {}): VerdictSet {
+  return {
+    head_sha: HEAD_SHA,
+    verdicts: [
+      {
+        claim_id: "c1",
+        status: "supported",
+        explanation: "The upload loop now tries three times before giving up.",
+        citations: [
+          { kind: "diff", path: "src/upload.py", start_line: 10, end_line: 14 },
+          {
+            kind: "check",
+            name: "lint",
+            source: "check_run",
+            status: "completed",
+            conclusion: "success",
+          },
+        ],
+        missing_tests: ["A test where every attempt fails."],
+        edge_cases: ["A timeout on the last attempt."],
+        dropped_citations: 0,
+        notes: [],
+      },
+      {
+        claim_id: "c2",
+        status: "insufficient_evidence",
+        explanation: "The test file changed, but the tests check failed.",
+        citations: [],
+        missing_tests: [],
+        edge_cases: [],
+        dropped_citations: 1,
+        notes: [
+          "1 citation was left out because it doesn't point to lines shown in the diff or to a CI check.",
+        ],
+      },
+    ],
+    dropped_citations: 1,
+    notes: ["1 citation in all was left out because it didn't match the diff or a CI check."],
+    scope_limitations: [],
+    provider: "claude_code",
+    model: "claude-opus-5-5",
+    ...overrides,
+  };
 }

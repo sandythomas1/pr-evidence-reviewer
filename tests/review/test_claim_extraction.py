@@ -14,6 +14,8 @@ from pr_evidence_reviewer.review.claim_extraction import (
     NO_DESCRIPTION_NOTE,
     SYSTEM_PROMPT,
     ClaimExtractor,
+    grounding_text,
+    is_grounded,
     normalize_whitespace,
 )
 from tests.llm.fakes import FakeProvider
@@ -240,3 +242,14 @@ async def test_provider_errors_propagate_and_are_never_an_empty_result(error: Ex
 
 def test_normalize_whitespace_collapses_runs_and_trims() -> None:
     assert normalize_whitespace("  a\n\n b\t\tc  ") == "a b c"
+
+
+def test_grounding_text_reads_the_title_and_only_the_part_of_the_description_that_is_read() -> None:
+    body = "Retries\nfailed uploads. " + "x" * MAX_DESCRIPTION_CHARS + " Deletes the importer."
+
+    haystack = grounding_text(TITLE, body)
+
+    assert is_grounded(TITLE, haystack)
+    assert is_grounded("Retries   failed uploads.", haystack)
+    assert not is_grounded("Deletes the importer.", haystack)
+    assert not is_grounded("  ", haystack)

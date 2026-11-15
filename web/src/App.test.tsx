@@ -2,11 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "./api";
 import { App } from "./App";
-import { makeClaimSet, makeProviders, makeSnapshot } from "./test/fixtures";
-import type { ClaimsResponse, PullRequestSnapshot } from "./types";
+import { makeClaimSet, makeProviders, makeSnapshot, makeVerdictSet } from "./test/fixtures";
+import type { ClaimsResponse, PullRequestSnapshot, VerdictsResponse } from "./types";
 
 const LINK = "https://github.com/octo-org/widgets/pull/42";
 const never = () => new Promise<ClaimsResponse>(() => undefined);
+const neverChecked = () => new Promise<VerdictsResponse>(() => undefined);
 const providers = () => Promise.resolve(makeProviders());
 
 function deferred<T>() {
@@ -103,6 +104,7 @@ describe("App", () => {
         loadProviders={providers}
         loadSnapshot={() => Promise.resolve(makeSnapshot())}
         loadClaims={loadClaims}
+        loadVerdicts={neverChecked}
       />,
     );
 
@@ -117,7 +119,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Claims (2)" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Retry uploads" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Found 2 claims.");
-    expect(screen.getByRole("button", { name: "Load pull request" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();
   });
 
   it("keeps the snapshot when finding claims fails", async () => {
@@ -180,6 +182,7 @@ describe("App", () => {
         loadProviders={providers}
         loadSnapshot={() => Promise.resolve(makeSnapshot())}
         loadClaims={loadClaims}
+        loadVerdicts={neverChecked}
       />,
     );
 
@@ -224,5 +227,77 @@ describe("App", () => {
 
     await screen.findByRole("heading", { name: "Add retry to the upload client" });
     expect(loadClaims).toHaveBeenCalledWith(LINK, null);
+  });
+
+  it("checks the claims after they load and announces the verdicts", async () => {
+    const user = userEvent.setup();
+    const checked = deferred<VerdictsResponse>();
+    const loadVerdicts = vi.fn(() => checked.promise);
+    const found = { snapshot: makeSnapshot(), claims: makeClaimSet() };
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={() => Promise.resolve(found)}
+        loadVerdicts={loadVerdicts}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Found 2 claims. Checking them against the diff…",
+    );
+    expect(loadVerdicts).toHaveBeenCalledWith(LINK, found.claims.claims);
+    expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();
+
+    checked.resolve({ snapshot: makeSnapshot(), verdicts: makeVerdictSet() });
+
+    expect(await screen.findByText("Supported")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Checked: 1 supported, 1 insufficient evidence.",
+    );
+    expect(screen.getByRole("button", { name: "Load pull request" })).toBeEnabled();
+  });
+
+  it("keeps the claims when checking them fails", async () => {
+    const user = userEvent.setup();
+    const loadVerdicts = () =>
+      Promise.reject(new ApiError("Claude Code isn't signed in.", "llm_unavailable"));
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={() => Promise.resolve({ snapshot: makeSnapshot(), claims: makeClaimSet() })}
+        loadVerdicts={loadVerdicts}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't check the claims. Claude Code isn't signed in.",
+    );
+    expect(screen.getAllByText("Analysis failed")).toHaveLength(2);
+    expect(screen.getByRole("status")).toHaveTextContent("They couldn't be checked.");
+  });
+
+  it("doesn't check anything when there are no claims", async () => {
+    const user = userEvent.setup();
+    const loadVerdicts = vi.fn(neverChecked);
+    const empty = { snapshot: makeSnapshot(), claims: makeClaimSet({ claims: [] }) };
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={() => Promise.resolve(empty)}
+        loadVerdicts={loadVerdicts}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
+
+    expect(await screen.findByRole("heading", { name: "Claims (0)" })).toBeInTheDocument();
+    expect(loadVerdicts).not.toHaveBeenCalled();
   });
 });

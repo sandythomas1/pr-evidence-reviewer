@@ -5,7 +5,10 @@ const FAILED = new Set(["failure", "error", "timed_out", "action_required"]);
 const shortSha = (sha: string) => sha.slice(0, 7);
 const humanize = (value: string) => value.replaceAll("_", " ");
 
-function checkOutcome(check: CheckResult): { label: string; tone: string } {
+export function checkOutcome(check: Pick<CheckResult, "status" | "conclusion">): {
+  label: string;
+  tone: string;
+} {
   if (check.status !== "completed") return { label: humanize(check.status), tone: "pending" };
   if (check.conclusion === null) return { label: "no result", tone: "neutral" };
   if (check.conclusion === "success") return { label: "passed", tone: "pass" };

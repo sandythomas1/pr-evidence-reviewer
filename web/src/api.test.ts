@@ -1,5 +1,5 @@
-import { ApiError, fetchClaims, fetchProviders, fetchSnapshot } from "./api";
-import { makeClaimSet, makeProviders, makeSnapshot } from "./test/fixtures";
+import { ApiError, fetchClaims, fetchProviders, fetchSnapshot, fetchVerdicts } from "./api";
+import { makeClaimSet, makeProviders, makeSnapshot, makeVerdictSet } from "./test/fixtures";
 
 const LINK = "https://github.com/octo-org/widgets/pull/42";
 
@@ -103,5 +103,33 @@ describe("fetchProviders", () => {
     const fetchImpl: typeof fetch = () => Promise.reject(new TypeError("Failed to fetch"));
 
     await expect(fetchProviders(fetchImpl)).rejects.toThrow(/prev serve/);
+  });
+});
+
+describe("fetchVerdicts", () => {
+  it("posts the link and the claims to the verdicts endpoint", async () => {
+    const reply = { snapshot: makeSnapshot(), verdicts: makeVerdictSet() };
+    const fetchImpl = respond(200, reply);
+    const { claims } = makeClaimSet();
+
+    await expect(fetchVerdicts(LINK, claims, fetchImpl)).resolves.toEqual(reply);
+    expect(fetchImpl).toHaveBeenCalledWith("/api/verdicts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pr_url: LINK, claims }),
+    });
+  });
+
+  it("surfaces stale claims from the envelope", async () => {
+    const fetchImpl = respond(409, {
+      error: { code: "claims_out_of_date", message: "Load the pull request again." },
+    });
+
+    const error: unknown = await fetchVerdicts(LINK, makeClaimSet().claims, fetchImpl).catch(
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("claims_out_of_date");
   });
 });

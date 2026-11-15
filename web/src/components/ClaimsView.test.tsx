@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { makeClaimSet } from "../test/fixtures";
+import { makeClaimSet, makeSnapshot, makeVerdictSet } from "../test/fixtures";
 import { ClaimsView } from "./ClaimsView";
 
 describe("ClaimsView", () => {
@@ -83,5 +83,69 @@ describe("ClaimsView", () => {
     );
 
     expect(screen.getByText("Found by Codex.")).toBeInTheDocument();
+  });
+
+  describe("with verdicts", () => {
+    const claims = { kind: "loaded", claims: makeClaimSet() } as const;
+    const repo = makeSnapshot().ref;
+
+    function claimItem(index: number) {
+      const item = document.querySelectorAll<HTMLElement>("li.claim")[index];
+      if (!item) throw new Error("expected a claim");
+      return item;
+    }
+
+    it("shows each claim's verdict under it, with the set's notes and limits", () => {
+      const verdicts = makeVerdictSet({ scope_limitations: ["No diff is available for a.png."] });
+      render(<ClaimsView state={claims} verdicts={{ kind: "loaded", verdicts, repo }} />);
+
+      expect(claimItem(0)).toHaveTextContent("Supported");
+      expect(within(claimItem(0)).getByRole("link")).toHaveAttribute(
+        "href",
+        expect.stringContaining("/octo-org/widgets/blob/") as string,
+      );
+      expect(claimItem(1)).toHaveTextContent("Insufficient evidence");
+      expect(screen.getByText(/1 citation in all was left out/)).toBeInTheDocument();
+      expect(screen.getByText(/You make the approval decision/)).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: "Not checked" })).toHaveTextContent(
+        "No diff is available for a.png.",
+      );
+      expect(screen.getByText("Checked by claude-opus-5-5.")).toBeInTheDocument();
+      expect(screen.queryByText(/None of these has been checked/)).not.toBeInTheDocument();
+    });
+
+    it("marks a claim the model skipped as analysis failed", () => {
+      const verdicts = makeVerdictSet();
+      verdicts.verdicts = verdicts.verdicts.slice(0, 1);
+      render(<ClaimsView state={claims} verdicts={{ kind: "loaded", verdicts, repo }} />);
+
+      expect(claimItem(1)).toHaveTextContent("Analysis failed");
+      expect(claimItem(1)).toHaveTextContent(
+        "The model didn't return an assessment for this claim.",
+      );
+    });
+
+    it("keeps the claims and marks each one when checking fails", () => {
+      render(
+        <ClaimsView
+          state={claims}
+          verdicts={{ kind: "error", message: "Claude Code isn't signed in." }}
+        />,
+      );
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Couldn't check the claims. Claude Code isn't signed in.",
+      );
+      expect(screen.getAllByText("Analysis failed")).toHaveLength(2);
+      expect(screen.getByText("A failed upload is retried up to three times.")).toBeVisible();
+    });
+
+    it("marks the section busy while the claims are checked", () => {
+      render(<ClaimsView state={claims} verdicts={{ kind: "loading" }} />);
+
+      const section = screen.getByRole("region", { name: "Claims (2)" });
+      expect(section).toHaveAttribute("aria-busy", "true");
+      expect(section).toHaveTextContent("Checking each claim against the diff");
+    });
   });
 });

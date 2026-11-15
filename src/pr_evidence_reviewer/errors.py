@@ -41,6 +41,13 @@ class GitHubUnavailableError(ReviewerError):
     http_status = 502
 
 
+class ClaimsOutOfDateError(ReviewerError):
+    """The claims sent for checking no longer match the pull request's current text."""
+
+    code = "claims_out_of_date"
+    http_status = 409
+
+
 class ProviderUnavailableError(ReviewerError):
     """The model provider isn't installed, isn't signed in, or can't be started."""
 
