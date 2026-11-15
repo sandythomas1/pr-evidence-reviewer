@@ -37,7 +37,17 @@ Gemini joins Claude Code and Codex as a **signed-in CLI adapter** (`llm/gemini.p
 - **Structured output by prompt and validation.** The JSON Schema goes in the system prompt. The reply
   must be one JSON object, optionally wrapped in a single code fence, and it goes through the same
   `validate_output` as every other provider.
-- **Sign-in only.** `GEMINI_API_KEY` and `GOOGLE_API_KEY` are removed from the CLI's environment.
+- **Sign-in only, allowlisted environment.** The CLI gets only the variables it needs to start and find
+  its sign-in. API keys, Vertex AI settings, endpoint overrides, and other tokens are left out.
+- **No `.env` from above the workspace.** The CLI loads the first `.gemini/.env` or `.env` it finds
+  walking up from its working directory. An empty `.gemini/.env` in the workspace ends that search, so
+  a planted file (such as `C:\.gemini\.env`) can't redirect the sign-in token or the PR text. The
+  person's own `~/.gemini/.env` isn't loaded either.
+- **No self-relaunch.** `GEMINI_CLI_NO_RELAUNCH=true`, and the runner kills the whole process tree on
+  timeout, so no CLI process outlives a stopped run.
+- **Session records stay.** Each run's conversation, PR text included, is saved under `~/.gemini`.
+  0.68 can't switch recording off, and `general.sessionRetention` would also prune the person's other
+  chats, so the CLI's default 30-day cleanup applies.
 
 *Rejected:*
 - Calling the `.cmd` shim with a constant command line. It's safe today, but it depends on `cmd.exe`

@@ -30,14 +30,27 @@ Disabled:
 - Context files: `context.fileName` names a file that doesn't exist, so no `GEMINI.md` is loaded from the
   home folder or anywhere else, and `context.discoveryMaxDirs: 0`.
 - Checkpointing, telemetry, and usage statistics.
-- API keys: `GEMINI_API_KEY` and `GOOGLE_API_KEY` are removed from the child's environment, so the run
-  uses the Google sign-in and never a key that happens to be set.
+- The environment: the CLI gets only an allowlist (see `cli_env.py` plus `GEMINI_ENV_NAMES`). API keys
+  (`GEMINI_API_KEY`, `GOOGLE_API_KEY`), Vertex AI and service-account settings, endpoint overrides
+  (`CODE_ASSIST_ENDPOINT`, `GOOGLE_GEMINI_BASE_URL`), and GitHub or other providers' tokens are left
+  out, so the run uses the Google sign-in and talks only to Google's default endpoints.
+- `.env` files: the CLI looks for `.gemini/.env` or `.env` in its working directory and every folder
+  above it, and loads the first one it finds with full trust. Anyone who can write to a folder above
+  the temporary directory (on Windows, `C:\\.gemini\\.env` needs no admin rights) could otherwise set
+  an endpoint that receives the sign-in token and the PR text. An empty `.gemini/.env` in the workspace
+  ends that search before it leaves the workspace. Side effect: the person's own `~/.gemini/.env` isn't
+  loaded either, so a setting such as `GOOGLE_CLOUD_PROJECT` has to come from the real environment.
+- Self-relaunch: the CLI normally restarts itself as a child process with more memory, which a timeout
+  kill wouldn't reach. `GEMINI_CLI_NO_RELAUNCH=true` stops that, and the runner kills the whole process
+  tree anyway.
 
 Not disabled:
 - Admin system settings (`C:\\ProgramData\\gemini-cli\\settings.json` and equivalents) still rank above
   ours. They belong to the machine's administrator, not to PR text.
-- The CLI still keeps its own session records and project list under `~/.gemini`.
-- `.env` files the CLI finds above the workspace are still loaded. They are the person's own files.
+- Session records: each run saves its conversation, including the PR text, under `~/.gemini`, filed
+  under the run's temporary folder. 0.68 has no switch to stop recording. `general.sessionRetention`
+  could shorten how long records are kept, but it applies to every project's sessions, so setting it
+  here would delete the person's other chats. The CLI's own retention (30 days by default) applies.
 
 Not verified, because no signed-in account was available: the token counts under `stats` (parsed
 defensively, from the source's `stats.models.<model>.tokens` shape) and an end-to-end reply.
@@ -68,6 +81,7 @@ from pr_evidence_reviewer.llm.base import (
     Usage,
     validate_output,
 )
+from pr_evidence_reviewer.llm.cli_env import allowlisted_environment, refuse_if_in_start_folder
 from pr_evidence_reviewer.llm.process import (
     AsyncProcessRunner,
     OutputTooLargeError,
@@ -93,6 +107,7 @@ PRIVACY_WARNING = (
     "for private repositories."
 )
 SYSTEM_PROMPT_FILE = "system.md"
+EMPTY_ENV_FILE = ".env"
 WORKSPACE_DIR = "workspace"
 STDIN_INSTRUCTION = "Follow the system instructions for the input above. Reply with only JSON."
 EXIT_SIGNED_OUT = 41  # FatalAuthenticationError in the Gemini CLI.
@@ -117,7 +132,14 @@ LOCKED_DOWN_SETTINGS: dict[str, Any] = {
     "telemetry": {"enabled": False},
     "privacy": {"usageStatisticsEnabled": False},
 }
-REMOVED_ENV_VARS = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+# Where the sign-in lives and which Google Cloud project a Workspace account uses; nothing else.
+GEMINI_ENV_NAMES = (
+    "GEMINI_CLI_HOME",
+    "GOOGLE_CLOUD_PROJECT",
+    "GOOGLE_CLOUD_PROJECT_ID",
+    "GOOGLE_CLOUD_LOCATION",
+    "NODE_EXTRA_CA_CERTS",
+)
 
 _SIGNED_OUT_MARKERS = (
     "auth method",
@@ -158,9 +180,10 @@ def build_system_prompt[T: BaseModel](request: StructuredRequest[T]) -> str:
 
 
 def child_environment(system_prompt_path: Path, base: Mapping[str, str]) -> dict[str, str]:
-    env = {key: value for key, value in base.items() if key.upper() not in REMOVED_ENV_VARS}
+    env = allowlisted_environment(base, GEMINI_ENV_NAMES)
     env["GEMINI_SYSTEM_MD"] = str(system_prompt_path)
     env["GEMINI_CLI_TRUST_WORKSPACE"] = "true"
+    env["GEMINI_CLI_NO_RELAUNCH"] = "true"
     return env
 
 
@@ -209,6 +232,8 @@ class GeminiCliProvider:
             (settings_dir / "settings.json").write_text(
                 json.dumps(LOCKED_DOWN_SETTINGS, indent=2), encoding="utf-8"
             )
+            # Found first, so the CLI never loads a .env from a folder above the workspace.
+            (settings_dir / EMPTY_ENV_FILE).write_bytes(b"")
             environ = os.environ if self._environ is None else self._environ
             result = await self._run(
                 build_argv(command, self._model),
@@ -223,6 +248,7 @@ class GeminiCliProvider:
         found = self._which("gemini")
         if found is None:
             raise ProviderUnavailableError(f"Gemini CLI isn't installed. {INSTALL_HINT}")
+        refuse_if_in_start_folder(found, self.name)
         if Path(found).suffix.lower() not in _SHELL_WRAPPERS:
             return [found]
         return self._resolve_npm_shim(Path(found))
@@ -260,6 +286,7 @@ class GeminiCliProvider:
         found = str(bundled) if bundled.is_file() else self._which("node")
         if found is None or Path(found).suffix.lower() in _SHELL_WRAPPERS:
             return None
+        refuse_if_in_start_folder(found, "Node.js")
         return found
 
     async def _run(

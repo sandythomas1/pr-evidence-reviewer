@@ -62,6 +62,7 @@ class WorkspaceReadingRunner(StubRunner):
     def __init__(self, result: ProcessResult | Exception) -> None:
         super().__init__(result)
         self.settings: dict[str, Any] = {}
+        self.settings_dir: dict[str, bytes] = {}
         self.system_prompt = ""
 
     async def run(
@@ -75,6 +76,9 @@ class WorkspaceReadingRunner(StubRunner):
         env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         self.settings = json.loads((cwd / ".gemini" / "settings.json").read_text(encoding="utf-8"))
+        self.settings_dir = {
+            entry.name: entry.read_bytes() for entry in (cwd / ".gemini").iterdir()
+        }
         if env is not None:
             self.system_prompt = Path(env["GEMINI_SYSTEM_MD"]).read_text(encoding="utf-8")
         return await super().run(
@@ -92,7 +96,8 @@ def provider(
 ) -> tuple[GeminiCliProvider, WorkspaceReadingRunner]:
     runner = WorkspaceReadingRunner(result)
     paths = {"gemini": GEMINI} if which is None else which
-    gemini = GeminiCliProvider(which=paths.get, runner=runner, environ=ENVIRON, **kwargs)
+    kwargs.setdefault("environ", ENVIRON)
+    gemini = GeminiCliProvider(which=paths.get, runner=runner, **kwargs)
     return gemini, runner
 
 
@@ -156,9 +161,38 @@ async def test_runs_in_an_empty_workspace_holding_only_the_locked_down_settings(
     await gemini.complete_structured(REQUEST)
 
     assert runner.cwd_contents == [".gemini"]
+    assert sorted(runner.settings_dir) == [".env", "settings.json"]
     assert runner.settings == LOCKED_DOWN_SETTINGS
     assert runner.cwd is not None
-    assert not runner.cwd.exists()
+    assert not runner.cwd.parent.exists()
+
+
+async def test_an_empty_env_file_stops_the_cli_loading_one_from_a_folder_above() -> None:
+    gemini, runner = provider(ok(output()))
+
+    await gemini.complete_structured(REQUEST)
+
+    assert runner.settings_dir[".env"] == b""
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        ProcessResult(returncode=1, stdout=b"", stderr=b"boom"),
+        ProcessTimeoutError(),
+        OutputTooLargeError(),
+    ],
+)
+async def test_the_temporary_directory_is_removed_when_the_run_fails(
+    result: ProcessResult | Exception,
+) -> None:
+    gemini, runner = provider(result)
+
+    with pytest.raises((ProviderFailedError, ProviderTimeoutError, ProviderInvalidOutputError)):
+        await gemini.complete_structured(REQUEST)
+
+    assert runner.cwd is not None
+    assert not runner.cwd.parent.exists()
 
 
 def test_the_settings_switch_off_every_tool_and_outside_integration() -> None:
@@ -183,16 +217,50 @@ async def test_replaces_the_system_prompt_and_puts_the_schema_in_it() -> None:
     assert "Adds retry" not in runner.system_prompt
 
 
-async def test_trusts_only_its_own_workspace_and_drops_api_keys() -> None:
+async def test_trusts_only_its_own_workspace_and_does_not_relaunch() -> None:
     gemini, runner = provider(ok(output()))
 
     await gemini.complete_structured(REQUEST)
 
     assert runner.env is not None
     assert runner.env["GEMINI_CLI_TRUST_WORKSPACE"] == "true"
-    assert runner.env["PATH"] == "/usr/bin"
-    assert "GEMINI_API_KEY" not in runner.env
-    assert "GOOGLE_API_KEY" not in runner.env
+    assert runner.env["GEMINI_CLI_NO_RELAUNCH"] == "true"
+    assert Path(runner.env["GEMINI_SYSTEM_MD"]).name == "system.md"
+
+
+async def test_gets_only_the_allowed_environment_so_keys_and_endpoint_overrides_stay_out() -> None:
+    environ = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/someone",
+        "GOOGLE_CLOUD_PROJECT": "my-project",
+        "GEMINI_API_KEY": "placeholder",
+        "GOOGLE_API_KEY": "placeholder",
+        "GOOGLE_GENAI_USE_VERTEXAI": "true",
+        "GOOGLE_APPLICATION_CREDENTIALS": "/home/someone/key.json",
+        "CODE_ASSIST_ENDPOINT": "https://elsewhere.example",
+        "GOOGLE_GEMINI_BASE_URL": "https://elsewhere.example",
+        "GH_TOKEN": "placeholder",
+        "ANTHROPIC_API_KEY": "placeholder",
+        "OPENAI_API_KEY": "placeholder",
+    }
+    gemini, runner = provider(ok(output()), environ=environ)
+
+    await gemini.complete_structured(REQUEST)
+
+    assert runner.env is not None
+    passed_through = {
+        name: value for name, value in runner.env.items() if not name.startswith("GEMINI_")
+    }
+    assert passed_through == {
+        "PATH": "/usr/bin",
+        "HOME": "/home/someone",
+        "GOOGLE_CLOUD_PROJECT": "my-project",
+    }
+    assert set(runner.env) - set(passed_through) == {
+        "GEMINI_SYSTEM_MD",
+        "GEMINI_CLI_TRUST_WORKSPACE",
+        "GEMINI_CLI_NO_RELAUNCH",
+    }
 
 
 async def test_passes_the_timeout_and_output_cap() -> None:
@@ -409,3 +477,31 @@ def test_refuses_when_node_is_only_a_batch_file(tmp_path: Path) -> None:
     gemini, _ = provider(ok(b""), which={"gemini": str(shim), "node": "C:/tools/node.bat"})
 
     assert gemini.status().available is False
+
+
+def test_refuses_a_gemini_in_the_start_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    planted = tmp_path / "gemini.exe"
+    planted.write_bytes(b"")
+    gemini, _ = provider(ok(b""), which={"gemini": str(planted)})
+
+    status = gemini.status()
+
+    assert status.available is False
+    assert "folder the reviewer was started from" in status.detail
+
+
+async def test_refuses_a_node_in_the_start_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shim = npm_layout(tmp_path / "npm", with_node=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "node.exe").write_bytes(b"")
+    which = {"gemini": str(shim), "node": str(tmp_path / "node.exe")}
+    gemini, runner = provider(ok(output()), which=which)
+
+    with pytest.raises(ProviderUnavailableError, match=r"Node\.js program"):
+        await gemini.complete_structured(REQUEST)
+    assert runner.argv == []
