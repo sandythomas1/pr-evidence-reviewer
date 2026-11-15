@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { ApiError, fetchClaims, fetchSnapshot } from "./api";
+import { useEffect, useState } from "react";
+import { ApiError, fetchClaims, fetchProviders, fetchSnapshot } from "./api";
 import { ClaimsView, type ClaimsState } from "./components/ClaimsView";
 import { PrLinkForm } from "./components/PrLinkForm";
+import { defaultProvider, ProviderSelect, type ProvidersState } from "./components/ProviderSelect";
 import { SnapshotView } from "./components/SnapshotView";
-import type { ClaimsResponse, PullRequestSnapshot } from "./types";
+import type { ClaimsResponse, ProviderStatus, PullRequestSnapshot } from "./types";
 
 type State =
   | { kind: "idle" }
@@ -13,7 +14,8 @@ type State =
 
 interface Props {
   loadSnapshot?: (prUrl: string) => Promise<PullRequestSnapshot>;
-  loadClaims?: (prUrl: string) => Promise<ClaimsResponse>;
+  loadClaims?: (prUrl: string, providerId: string | null) => Promise<ClaimsResponse>;
+  loadProviders?: () => Promise<ProviderStatus[]>;
 }
 
 const errorMessage = (error: unknown) =>
@@ -36,8 +38,36 @@ function announcement(state: State): string {
   }
 }
 
-export function App({ loadSnapshot = fetchSnapshot, loadClaims = fetchClaims }: Props) {
+function providerName(providers: ProvidersState, providerId: string | null): string | null {
+  if (providers.kind !== "loaded" || providerId === null) return null;
+  return providers.providers.find((provider) => provider.id === providerId)?.name ?? null;
+}
+
+export function App({
+  loadSnapshot = fetchSnapshot,
+  loadClaims = fetchClaims,
+  loadProviders = fetchProviders,
+}: Props) {
   const [state, setState] = useState<State>({ kind: "idle" });
+  const [providers, setProviders] = useState<ProvidersState>({ kind: "loading" });
+  const [providerId, setProviderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    loadProviders().then(
+      (found) => {
+        if (!current) return;
+        setProviders({ kind: "loaded", providers: found });
+        setProviderId(defaultProvider(found));
+      },
+      () => {
+        if (current) setProviders({ kind: "error" });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [loadProviders]);
 
   async function load(prUrl: string) {
     setState({ kind: "loading" });
@@ -51,7 +81,7 @@ export function App({ loadSnapshot = fetchSnapshot, loadClaims = fetchClaims }: 
     // Show the snapshot right away; the model step can take a minute.
     setState({ kind: "loaded", snapshot, claims: { kind: "loading" } });
     try {
-      const result = await loadClaims(prUrl);
+      const result = await loadClaims(prUrl, providerId);
       // The claims were checked against this snapshot's text, so show the two together.
       setState({
         kind: "loaded",
@@ -83,6 +113,12 @@ export function App({ loadSnapshot = fetchSnapshot, loadClaims = fetchClaims }: 
           void load(prUrl);
         }}
       />
+      <ProviderSelect
+        state={providers}
+        selected={providerId}
+        disabled={busy}
+        onChange={setProviderId}
+      />
       <p className="visually-hidden" role="status" aria-live="polite">
         {announcement(state)}
       </p>
@@ -94,7 +130,14 @@ export function App({ loadSnapshot = fetchSnapshot, loadClaims = fetchClaims }: 
       {state.kind === "loaded" && (
         <>
           <SnapshotView snapshot={state.snapshot} />
-          <ClaimsView state={state.claims} />
+          <ClaimsView
+            state={state.claims}
+            providerName={
+              state.claims.kind === "loaded"
+                ? providerName(providers, state.claims.claims.provider)
+                : null
+            }
+          />
         </>
       )}
     </main>

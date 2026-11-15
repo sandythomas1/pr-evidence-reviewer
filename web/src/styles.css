@@ -244,3 +244,27 @@ td code {
 .note {
   color: var(--muted);
 }
+
+.provider-field {
+  margin-top: 0.75rem;
+}
+
+.provider-field label {
+  display: block;
+  font-weight: 600;
+}
+
+.provider-field select {
+  margin: 0.25rem 0;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.provider-field .hint,
+.provider-reasons ul {
+  margin: 0.25rem 0;
+}

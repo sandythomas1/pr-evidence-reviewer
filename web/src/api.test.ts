@@ -1,5 +1,5 @@
-import { ApiError, fetchClaims, fetchSnapshot } from "./api";
-import { makeClaimSet, makeSnapshot } from "./test/fixtures";
+import { ApiError, fetchClaims, fetchProviders, fetchSnapshot } from "./api";
+import { makeClaimSet, makeProviders, makeSnapshot } from "./test/fixtures";
 
 const LINK = "https://github.com/octo-org/widgets/pull/42";
 
@@ -56,7 +56,7 @@ describe("fetchClaims", () => {
     const reply = { snapshot: makeSnapshot(), claims: makeClaimSet() };
     const fetchImpl = respond(200, reply);
 
-    await expect(fetchClaims(LINK, fetchImpl)).resolves.toEqual(reply);
+    await expect(fetchClaims(LINK, null, fetchImpl)).resolves.toEqual(reply);
     expect(fetchImpl).toHaveBeenCalledWith("/api/claims", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,9 +69,39 @@ describe("fetchClaims", () => {
       error: { code: "llm_unavailable", message: "Claude Code isn't signed in." },
     });
 
-    const error: unknown = await fetchClaims(LINK, fetchImpl).catch((e: unknown) => e);
+    const error: unknown = await fetchClaims(LINK, "codex", fetchImpl).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).code).toBe("llm_unavailable");
+  });
+});
+
+describe("fetchClaims with a chosen provider", () => {
+  it("sends the provider id with the link", async () => {
+    const fetchImpl = respond(200, { snapshot: makeSnapshot(), claims: makeClaimSet() });
+
+    await fetchClaims(LINK, "gemini", fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledWith("/api/claims", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pr_url: LINK, provider: "gemini" }),
+    });
+  });
+});
+
+describe("fetchProviders", () => {
+  it("reads the provider list from the runner", async () => {
+    const providers = makeProviders();
+    const fetchImpl = respond(200, providers);
+
+    await expect(fetchProviders(fetchImpl)).resolves.toEqual(providers);
+    expect(fetchImpl).toHaveBeenCalledWith("/api/providers", { method: "GET" });
+  });
+
+  it("explains when the runner can't be reached", async () => {
+    const fetchImpl: typeof fetch = () => Promise.reject(new TypeError("Failed to fetch"));
+
+    await expect(fetchProviders(fetchImpl)).rejects.toThrow(/prev serve/);
   });
 });

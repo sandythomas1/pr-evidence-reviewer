@@ -63,3 +63,10 @@ class ProviderInvalidOutputError(ReviewerError):
 class ProviderFailedError(ReviewerError):
     code = "llm_failed"
     http_status = 502
+
+
+class UnknownProviderError(ReviewerError):
+    """The request named a model provider this runner doesn't offer."""
+
+    code = "unknown_provider"
+    http_status = 422

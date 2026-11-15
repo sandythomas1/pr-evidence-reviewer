@@ -105,3 +105,64 @@ def test_bad_links_never_reach_github_or_the_model() -> None:
     assert response.json()["error"]["code"] == "invalid_pr_url"
     assert fake.requests == []
     assert provider.requests == []
+
+
+def test_uses_the_chosen_provider_even_when_an_earlier_one_is_ready() -> None:
+    first = FakeProvider(REPLY, provider_id="first")
+    chosen = FakeProvider(REPLY, provider_id="chosen")
+    client = make_client(FakeGitHub(), first, chosen)
+
+    response = client.post("/api/claims", json={"pr_url": PR_URL, "provider": "chosen"})
+
+    assert response.status_code == 200
+    assert response.json()["claims"]["provider"] == "chosen"
+    assert first.requests == []
+    assert len(chosen.requests) == 1
+
+
+def test_a_null_provider_means_the_first_ready_one() -> None:
+    ready = FakeProvider(REPLY, provider_id="ready")
+    client = make_client(FakeGitHub(), FakeProvider(available=False), ready)
+
+    response = client.post("/api/claims", json={"pr_url": PR_URL, "provider": None})
+
+    assert response.status_code == 200
+    assert response.json()["claims"]["provider"] == "ready"
+
+
+def test_an_unknown_provider_is_a_422_before_github_is_called() -> None:
+    fake = FakeGitHub()
+    client = make_client(fake, FakeProvider(REPLY, name="Claude Code"))
+
+    response = client.post("/api/claims", json={"pr_url": PR_URL, "provider": "nope"})
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "unknown_provider",
+            "message": "That model provider isn't offered here. Choose one of: Claude Code.",
+        }
+    }
+    assert fake.requests == []
+
+
+def test_a_chosen_provider_that_isnt_ready_is_a_503_with_its_reason() -> None:
+    fake = FakeGitHub()
+    missing = FakeProvider(available=False, provider_id="missing")
+    client = make_client(fake, FakeProvider(REPLY), missing)
+
+    response = client.post("/api/claims", json={"pr_url": PR_URL, "provider": "missing"})
+
+    assert response.status_code == 503
+    assert response.json() == {"error": {"code": "llm_unavailable", "message": "Not installed."}}
+    assert fake.requests == []
+
+
+def test_rejects_a_provider_that_isnt_a_short_string() -> None:
+    client = make_client(FakeGitHub(), FakeProvider(REPLY))
+
+    for provider in ("", "x" * 65, 7):
+        response = client.post("/api/claims", json={"pr_url": PR_URL, "provider": provider})
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_request"

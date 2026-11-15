@@ -1,4 +1,4 @@
-import type { ClaimsResponse, PullRequestSnapshot } from "./types";
+import type { ClaimsResponse, ProviderStatus, PullRequestSnapshot } from "./types";
 
 /** An API failure whose message is safe and useful to show the user. */
 export class ApiError extends Error {
@@ -23,14 +23,14 @@ function errorDetail(body: unknown): { code: string; message: string } | null {
   return message ? { code, message } : null;
 }
 
-async function postJson<T>(path: string, payload: unknown, fetchImpl: typeof fetch): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  init: RequestInit,
+  fetchImpl: typeof fetch,
+): Promise<T> {
   let response: Response;
   try {
-    response = await fetchImpl(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    response = await fetchImpl(path, init);
   } catch {
     throw new ApiError(UNREACHABLE, "runner_unreachable");
   }
@@ -49,6 +49,18 @@ async function postJson<T>(path: string, payload: unknown, fetchImpl: typeof fet
   return body as T;
 }
 
+function postJson<T>(path: string, payload: unknown, fetchImpl: typeof fetch): Promise<T> {
+  return requestJson<T>(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    fetchImpl,
+  );
+}
+
 export function fetchSnapshot(
   prUrl: string,
   fetchImpl: typeof fetch = fetch,
@@ -56,10 +68,20 @@ export function fetchSnapshot(
   return postJson<PullRequestSnapshot>("/api/snapshots", { pr_url: prUrl }, fetchImpl);
 }
 
-/** Slower than fetchSnapshot: the runner asks the model to pull the claims out of the PR text. */
+/** The model providers this machine offers, in the runner's order, each saying whether it's ready. */
+export function fetchProviders(fetchImpl: typeof fetch = fetch): Promise<ProviderStatus[]> {
+  return requestJson<ProviderStatus[]>("/api/providers", { method: "GET" }, fetchImpl);
+}
+
+/**
+ * Slower than fetchSnapshot: the runner asks the model to pull the claims out of the PR text.
+ * Without a provider id the runner uses the first ready one.
+ */
 export function fetchClaims(
   prUrl: string,
+  providerId: string | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ClaimsResponse> {
-  return postJson<ClaimsResponse>("/api/claims", { pr_url: prUrl }, fetchImpl);
+  const payload = providerId === null ? { pr_url: prUrl } : { pr_url: prUrl, provider: providerId };
+  return postJson<ClaimsResponse>("/api/claims", payload, fetchImpl);
 }

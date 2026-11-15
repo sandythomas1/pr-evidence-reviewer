@@ -1,4 +1,4 @@
-import type { ClaimSet, PullRequestSnapshot } from "../types";
+import type { ClaimSet, ProviderStatus, PullRequestSnapshot } from "../types";
 
 export const HEAD_SHA = "a".repeat(40);
 export const BASE_SHA = "b".repeat(40);
@@ -66,4 +66,29 @@ export function makeClaimSet(overrides: Partial<ClaimSet> = {}): ClaimSet {
     model: "claude-opus-5-5",
     ...overrides,
   };
+}
+
+export function makeProviders(): ProviderStatus[] {
+  return [
+    {
+      id: "claude_code",
+      name: "Claude Code",
+      available: true,
+      detail: "Found at /usr/local/bin/claude.",
+    },
+    {
+      id: "codex",
+      name: "Codex",
+      available: false,
+      detail: "Codex isn't installed. Install the Codex CLI, run `codex login`, then try again.",
+    },
+    {
+      id: "gemini",
+      name: "Gemini CLI",
+      available: true,
+      detail:
+        "Found at /usr/local/bin/gemini. With a free Google account, Google may use what you " +
+        "send to improve its products, so avoid it for private repositories.",
+    },
+  ];
 }

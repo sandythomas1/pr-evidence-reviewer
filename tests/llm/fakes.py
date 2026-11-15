@@ -19,7 +19,15 @@ class FakeProvider:
     id = "fake"
     name = "Fake model"
 
-    def __init__(self, *replies: object, available: bool = True) -> None:
+    def __init__(
+        self,
+        *replies: object,
+        available: bool = True,
+        provider_id: str = "fake",
+        name: str = "Fake model",
+    ) -> None:
+        self.id = provider_id
+        self.name = name
         self._replies = list(replies)
         self._available = available
         self.requests: list[StructuredRequest[BaseModel]] = []
