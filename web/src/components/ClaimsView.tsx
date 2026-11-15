@@ -13,7 +13,20 @@ const KIND_LABELS: Record<ClaimKind, string> = {
 export type ClaimsState =
   { kind: "loading" } | { kind: "error"; message: string } | { kind: "loaded"; claims: ClaimSet };
 
-function Body({ state }: { state: ClaimsState }) {
+interface Props {
+  state: ClaimsState;
+  /** The display name for the provider id in the claim set, when the runner listed it. */
+  providerName?: string | null;
+}
+
+function foundBy(providerName: string | null, provider: string | null, model: string | null) {
+  if (providerName)
+    return model ? `Found by ${providerName}, using ${model}.` : `Found by ${providerName}.`;
+  const fallback = model ?? provider;
+  return fallback ? `Found by ${fallback}.` : null;
+}
+
+function Body({ state, providerName = null }: Props) {
   if (state.kind === "loading") {
     return <p className="hint">Reading the description and pulling out its claims…</p>;
   }
@@ -26,6 +39,7 @@ function Body({ state }: { state: ClaimsState }) {
   }
 
   const { claims, notes, scope_limitations: notRead, model, provider } = state.claims;
+  const found = foundBy(providerName, provider, model);
   return (
     <>
       {claims.length > 0 && (
@@ -60,12 +74,12 @@ function Body({ state }: { state: ClaimsState }) {
           ))}
         </ol>
       )}
-      {(model ?? provider) && <p className="hint">Found by {model ?? provider}.</p>}
+      {found && <p className="hint">{found}</p>}
     </>
   );
 }
 
-export function ClaimsView({ state }: { state: ClaimsState }) {
+export function ClaimsView({ state, providerName = null }: Props) {
   const count = state.kind === "loaded" ? ` (${String(state.claims.claims.length)})` : "";
   return (
     <section
@@ -74,7 +88,7 @@ export function ClaimsView({ state }: { state: ClaimsState }) {
       aria-busy={state.kind === "loading"}
     >
       <h3 id="claims-title">Claims{count}</h3>
-      <Body state={state} />
+      <Body state={state} providerName={providerName} />
     </section>
   );
 }

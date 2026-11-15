@@ -2,11 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "./api";
 import { App } from "./App";
-import { makeClaimSet, makeSnapshot } from "./test/fixtures";
+import { makeClaimSet, makeProviders, makeSnapshot } from "./test/fixtures";
 import type { ClaimsResponse, PullRequestSnapshot } from "./types";
 
 const LINK = "https://github.com/octo-org/widgets/pull/42";
 const never = () => new Promise<ClaimsResponse>(() => undefined);
+const providers = () => Promise.resolve(makeProviders());
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -20,7 +21,7 @@ describe("App", () => {
   it("loads a pull request using only the keyboard", async () => {
     const user = userEvent.setup();
     const loadSnapshot = vi.fn(() => Promise.resolve(makeSnapshot()));
-    render(<App loadSnapshot={loadSnapshot} loadClaims={never} />);
+    render(<App loadProviders={providers} loadSnapshot={loadSnapshot} loadClaims={never} />);
 
     await user.tab();
     expect(screen.getByLabelText("Pull request link")).toHaveFocus();
@@ -38,7 +39,7 @@ describe("App", () => {
   it("checks the link shape before calling the runner", async () => {
     const user = userEvent.setup();
     const loadSnapshot = vi.fn();
-    render(<App loadSnapshot={loadSnapshot} loadClaims={never} />);
+    render(<App loadProviders={providers} loadSnapshot={loadSnapshot} loadClaims={never} />);
 
     await user.type(screen.getByLabelText("Pull request link"), "https://github.com/octo-org");
     await user.click(screen.getByRole("button", { name: "Load pull request" }));
@@ -52,7 +53,9 @@ describe("App", () => {
   it("announces loading and disables the button while waiting", async () => {
     const user = userEvent.setup();
     const pending = deferred<PullRequestSnapshot>();
-    render(<App loadSnapshot={() => pending.promise} loadClaims={never} />);
+    render(
+      <App loadProviders={providers} loadSnapshot={() => pending.promise} loadClaims={never} />,
+    );
 
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
 
@@ -70,7 +73,7 @@ describe("App", () => {
     const user = userEvent.setup();
     const loadSnapshot = () =>
       Promise.reject(new ApiError("Couldn't find octo-org/widgets#42.", "github_not_found"));
-    render(<App loadSnapshot={loadSnapshot} loadClaims={never} />);
+    render(<App loadProviders={providers} loadSnapshot={loadSnapshot} loadClaims={never} />);
 
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
 
@@ -82,7 +85,7 @@ describe("App", () => {
   it("never shows raw exception text", async () => {
     const user = userEvent.setup();
     const loadSnapshot = () => Promise.reject(new Error("TypeError at line 12: secret internals"));
-    render(<App loadSnapshot={loadSnapshot} loadClaims={never} />);
+    render(<App loadProviders={providers} loadSnapshot={loadSnapshot} loadClaims={never} />);
 
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
 
@@ -95,13 +98,19 @@ describe("App", () => {
     const user = userEvent.setup();
     const claims = deferred<ClaimsResponse>();
     const loadClaims = vi.fn(() => claims.promise);
-    render(<App loadSnapshot={() => Promise.resolve(makeSnapshot())} loadClaims={loadClaims} />);
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={loadClaims}
+      />,
+    );
 
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
     expect(
       await screen.findByRole("heading", { name: "Add retry to the upload client" }),
     ).toBeInTheDocument();
-    expect(loadClaims).toHaveBeenCalledWith(LINK);
+    expect(loadClaims).toHaveBeenCalledWith(LINK, "claude_code");
 
     claims.resolve({ snapshot: makeSnapshot({ title: "Retry uploads" }), claims: makeClaimSet() });
 
@@ -115,7 +124,13 @@ describe("App", () => {
     const user = userEvent.setup();
     const loadClaims = () =>
       Promise.reject(new ApiError("Claude Code isn't signed in.", "llm_unavailable"));
-    render(<App loadSnapshot={() => Promise.resolve(makeSnapshot())} loadClaims={loadClaims} />);
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={loadClaims}
+      />,
+    );
 
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
 
@@ -133,11 +148,81 @@ describe("App", () => {
     const user = userEvent.setup();
     const loadClaims = vi.fn(never);
     const loadSnapshot = () => Promise.reject(new ApiError("Not found.", "github_not_found"));
-    render(<App loadSnapshot={loadSnapshot} loadClaims={loadClaims} />);
+    render(<App loadProviders={providers} loadSnapshot={loadSnapshot} loadClaims={loadClaims} />);
 
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not found.");
     expect(loadClaims).not.toHaveBeenCalled();
+  });
+
+  it("offers each model provider, defaulting to the first ready one", async () => {
+    render(<App loadProviders={providers} loadSnapshot={vi.fn()} loadClaims={never} />);
+
+    const select = await screen.findByLabelText("Model provider");
+    expect(select).toHaveValue("claude_code");
+    expect(select).toHaveAccessibleDescription(/Found at \/usr\/local\/bin\/claude\./);
+    expect(select).toHaveAccessibleDescription(/Codex: Codex isn't installed/);
+    expect(screen.getByRole("option", { name: "Codex (not ready)" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Gemini CLI" })).toBeEnabled();
+  });
+
+  it("finds claims with the chosen provider and names it with the claims", async () => {
+    const user = userEvent.setup();
+    const loadClaims = vi.fn(() =>
+      Promise.resolve({
+        snapshot: makeSnapshot(),
+        claims: makeClaimSet({ provider: "gemini", model: "gemini-2.5-pro" }),
+      }),
+    );
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={loadClaims}
+      />,
+    );
+
+    const select = await screen.findByLabelText("Model provider");
+    await user.selectOptions(select, "Gemini CLI");
+    expect(select).toHaveAccessibleDescription(/free Google account/);
+    await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
+
+    expect(await screen.findByText("Found by Gemini CLI, using gemini-2.5-pro.")).toBeVisible();
+    expect(loadClaims).toHaveBeenCalledWith(LINK, "gemini");
+  });
+
+  it("can't change the provider while a review is running", async () => {
+    const user = userEvent.setup();
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={never}
+      />,
+    );
+
+    await screen.findByLabelText("Model provider");
+    await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
+
+    expect(await screen.findByLabelText("Model provider")).toBeDisabled();
+  });
+
+  it("lets the runner choose when the provider list can't be loaded", async () => {
+    const user = userEvent.setup();
+    const loadClaims = vi.fn(never);
+    render(
+      <App
+        loadProviders={() => Promise.reject(new Error("offline"))}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={loadClaims}
+      />,
+    );
+
+    expect(await screen.findByText(/first ready one will be used/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
+
+    await screen.findByRole("heading", { name: "Add retry to the upload client" });
+    expect(loadClaims).toHaveBeenCalledWith(LINK, null);
   });
 });

@@ -68,3 +68,11 @@ export interface ClaimsResponse {
   snapshot: PullRequestSnapshot;
   claims: ClaimSet;
 }
+
+/** Mirrors pr_evidence_reviewer.llm.base.ProviderStatus. */
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  available: boolean;
+  detail: string;
+}

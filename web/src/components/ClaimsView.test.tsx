@@ -65,4 +65,23 @@ describe("ClaimsView", () => {
       "Couldn't pull out the claims. Claude Code isn't signed in.",
     );
   });
+
+  it("names the provider and model that found the claims", () => {
+    render(
+      <ClaimsView state={{ kind: "loaded", claims: makeClaimSet() }} providerName="Claude Code" />,
+    );
+
+    expect(screen.getByText("Found by Claude Code, using claude-opus-5-5.")).toBeInTheDocument();
+  });
+
+  it("names just the provider when the model isn't known", () => {
+    render(
+      <ClaimsView
+        state={{ kind: "loaded", claims: makeClaimSet({ provider: "codex", model: null }) }}
+        providerName="Codex"
+      />,
+    );
+
+    expect(screen.getByText("Found by Codex.")).toBeInTheDocument();
+  });
 });
