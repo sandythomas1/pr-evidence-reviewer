@@ -17,9 +17,9 @@ pre-alpha. The MVP is due around **2026-12-10**.
 - **Local-first runner:** a Python package. One command serves FastAPI plus the built React UI on
   localhost. A hosted site that pairs with the runner comes later.
 - **GitHub:** read-only, through the user's `gh` sign-in token, read when needed and never stored.
-- **LLM:** our own thin provider interface. The adapters are the Claude Code CLI, the Codex CLI, Ollama,
-  and API keys for Anthropic, OpenAI, and Gemini. API keys are stored in an owner-only file and shown back
-  only as their last four characters.
+- **LLM:** our own thin provider interface. The adapters are the Claude Code, Codex, and Gemini CLIs (ADR 0002),
+  Ollama, and API keys for Anthropic, OpenAI, and Gemini. API keys are stored in an owner-only file and
+  shown back only as their last four characters.
 - **Evidence:**
   - *Standard review* builds a deterministic evidence packet: diff, read-only checkout search,
     test-file conventions, CI checks, and tree-sitter for about five languages.

@@ -25,8 +25,8 @@ as a gap, never as approval.
 
 - **Local-first.** A runner on your machine reads GitHub through your existing `gh` sign-in and serves
   the report on `localhost`. Your code and credentials stay on your computer.
-- **Bring your own LLM.** Use your signed-in Claude Code or Codex CLI (your subscription), a local model
-  through Ollama, or an API key for Anthropic, OpenAI, or Gemini.
+- **Bring your own LLM.** Use your signed-in Claude Code, Codex, or Gemini CLI (your subscription or
+  Google account), a local model through Ollama, or an API key for Anthropic, OpenAI, or Gemini.
 - **Any language.** Evidence comes from the diff, a read-only checkout, test-file conventions, and CI
   checks, with deeper symbol lookup for common languages.
 - **Two review modes.** *Standard* gives every provider the same evidence packet, so results are
