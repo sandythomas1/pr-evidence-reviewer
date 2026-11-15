@@ -23,4 +23,8 @@ def test_signed_in_cli_providers_are_offered_by_default_in_order() -> None:
     response = local_client(create_app()).get("/api/providers")
 
     assert response.status_code == 200
-    assert [provider["id"] for provider in response.json()] == ["claude_code", "codex"]
+    assert [provider["id"] for provider in response.json()] == [
+        "claude_code",
+        "codex",
+        "gemini",
+    ]
