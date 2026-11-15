@@ -1,14 +1,22 @@
-"""Runs a CLI provider as a child process: no shell, a hard timeout, and capped output."""
+"""Runs a CLI provider as a child process: no shell, a hard timeout, and capped output.
+
+When a run is stopped (timeout, too much output, or cancellation), the whole process tree is killed,
+not just the direct child, because some CLIs relaunch themselves as a child process.
+"""
 
 import asyncio
 import contextlib
-from collections.abc import Sequence
+import os
+import signal
+import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 READ_CHUNK_BYTES = 64 * 1024
 MAX_STDERR_BYTES = 64 * 1024
+TREE_KILL_TIMEOUT_SECONDS = 10.0
 
 
 class ProcessTimeoutError(Exception):
@@ -35,6 +43,7 @@ class ProcessRunner(Protocol):
         cwd: Path,
         timeout: float,
         max_output_bytes: int,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult: ...
 
 
@@ -49,6 +58,7 @@ class AsyncProcessRunner:
         cwd: Path,
         timeout: float,
         max_output_bytes: int,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         process = await asyncio.create_subprocess_exec(
             *argv,
@@ -56,6 +66,9 @@ class AsyncProcessRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            env=None if env is None else dict(env),
+            # Its own process group on POSIX, so the whole tree can be killed at once.
+            start_new_session=sys.platform != "win32",
         )
         if process.stdin is None or process.stdout is None or process.stderr is None:
             await _kill(process)
@@ -98,7 +111,43 @@ async def _read(stream: asyncio.StreamReader, limit: int, *, truncate: bool) -> 
 
 
 async def _kill(process: asyncio.subprocess.Process) -> None:
+    await _kill_descendants(process)
     if process.returncode is None:
         with contextlib.suppress(ProcessLookupError):
             process.kill()
-        await process.wait()
+    await process.wait()
+
+
+async def _kill_descendants(process: asyncio.subprocess.Process) -> None:
+    if sys.platform == "win32":
+        if process.returncode is None:
+            await _taskkill_tree(process.pid)
+    else:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, signal.SIGKILL)
+
+
+async def _taskkill_tree(pid: int) -> None:
+    """Kill a Windows process and everything it started. Best effort: the direct kill follows."""
+    system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    taskkill = os.path.join(system_root, "System32", "taskkill.exe")
+    try:
+        killer = await asyncio.create_subprocess_exec(
+            taskkill,
+            "/F",
+            "/T",
+            "/PID",
+            str(pid),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+    except OSError:
+        return
+    try:
+        async with asyncio.timeout(TREE_KILL_TIMEOUT_SECONDS):
+            await killer.wait()
+    except TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            killer.kill()
+        await killer.wait()

@@ -1,6 +1,6 @@
 """A scripted LLM provider for tests. It validates replies exactly like a real adapter does."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -50,6 +50,7 @@ class StubRunner:
         self.cwd_contents: list[str] = []
         self.timeout = 0.0
         self.max_output_bytes = 0
+        self.env: dict[str, str] | None = None
 
     async def run(
         self,
@@ -59,6 +60,7 @@ class StubRunner:
         cwd: Path,
         timeout: float,
         max_output_bytes: int,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         self.argv = list(argv)
         self.stdin = stdin
@@ -66,6 +68,7 @@ class StubRunner:
         self.cwd_contents = [entry.name for entry in cwd.iterdir()]
         self.timeout = timeout
         self.max_output_bytes = max_output_bytes
+        self.env = None if env is None else dict(env)
         if isinstance(self._result, Exception):
             raise self._result
         return self._result
