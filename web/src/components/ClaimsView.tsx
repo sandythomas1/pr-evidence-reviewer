@@ -22,13 +22,21 @@ interface Props {
   verdicts?: VerdictsState;
   /** The display name for the provider id in the claim set, when the runner listed it. */
   providerName?: string | null;
+  /** The same, for the provider id in the verdict set. */
+  verdictsProviderName?: string | null;
 }
 
-function foundBy(providerName: string | null, provider: string | null, model: string | null) {
+/** For example "Found by Claude Code, using claude-opus-5-5." */
+function attribution(
+  verb: "Found" | "Checked",
+  providerName: string | null,
+  provider: string | null,
+  model: string | null,
+) {
   if (providerName)
-    return model ? `Found by ${providerName}, using ${model}.` : `Found by ${providerName}.`;
+    return model ? `${verb} by ${providerName}, using ${model}.` : `${verb} by ${providerName}.`;
   const fallback = model ?? provider;
-  return fallback ? `Found by ${fallback}.` : null;
+  return fallback ? `${verb} by ${fallback}.` : null;
 }
 
 function ClaimAssessment({ claim, verdicts }: { claim: Claim; verdicts: VerdictsState }) {
@@ -91,7 +99,12 @@ function VerdictsSummary({ verdicts }: { verdicts: VerdictsState }) {
   );
 }
 
-function Body({ state, verdicts = { kind: "idle" }, providerName = null }: Props) {
+function Body({
+  state,
+  verdicts = { kind: "idle" },
+  providerName = null,
+  verdictsProviderName = null,
+}: Props) {
   if (state.kind === "loading") {
     return <p className="hint">Reading the description and pulling out its claims…</p>;
   }
@@ -104,9 +117,16 @@ function Body({ state, verdicts = { kind: "idle" }, providerName = null }: Props
   }
 
   const { claims, notes, scope_limitations: notRead, model, provider } = state.claims;
-  const found = foundBy(providerName, provider, model);
-  const checkedBy =
-    verdicts.kind === "loaded" ? (verdicts.verdicts.model ?? verdicts.verdicts.provider) : null;
+  const found = attribution("Found", providerName, provider, model);
+  const checked =
+    verdicts.kind === "loaded"
+      ? attribution(
+          "Checked",
+          verdictsProviderName,
+          verdicts.verdicts.provider,
+          verdicts.verdicts.model,
+        )
+      : null;
   return (
     <>
       {claims.length > 0 && <VerdictsSummary verdicts={verdicts} />}
@@ -138,12 +158,17 @@ function Body({ state, verdicts = { kind: "idle" }, providerName = null }: Props
         </ol>
       )}
       {found && <p className="hint">{found}</p>}
-      {checkedBy && <p className="hint">Checked by {checkedBy}.</p>}
+      {checked && <p className="hint">{checked}</p>}
     </>
   );
 }
 
-export function ClaimsView({ state, verdicts = { kind: "idle" }, providerName = null }: Props) {
+export function ClaimsView({
+  state,
+  verdicts = { kind: "idle" },
+  providerName = null,
+  verdictsProviderName = null,
+}: Props) {
   const count = state.kind === "loaded" ? ` (${String(state.claims.claims.length)})` : "";
   return (
     <section
@@ -152,7 +177,12 @@ export function ClaimsView({ state, verdicts = { kind: "idle" }, providerName = 
       aria-busy={state.kind === "loading" || verdicts.kind === "loading"}
     >
       <h3 id="claims-title">Claims{count}</h3>
-      <Body state={state} verdicts={verdicts} providerName={providerName} />
+      <Body
+        state={state}
+        verdicts={verdicts}
+        providerName={providerName}
+        verdictsProviderName={verdictsProviderName}
+      />
     </section>
   );
 }

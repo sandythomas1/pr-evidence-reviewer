@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
 from pr_evidence_reviewer.api.errors import ErrorResponse
+from pr_evidence_reviewer.api.providers import ProviderChoice
 from pr_evidence_reviewer.api.snapshots import SnapshotSourceDep
 from pr_evidence_reviewer.domain.claims import Claim
 from pr_evidence_reviewer.domain.pull_request import (
@@ -16,8 +17,9 @@ from pr_evidence_reviewer.domain.pull_request import (
     parse_pull_request_url,
 )
 from pr_evidence_reviewer.domain.verdicts import VerdictSet
-from pr_evidence_reviewer.errors import ClaimsOutOfDateError, ProviderUnavailableError
+from pr_evidence_reviewer.errors import ClaimsOutOfDateError
 from pr_evidence_reviewer.llm.base import LLMProvider
+from pr_evidence_reviewer.llm.selection import select_provider
 from pr_evidence_reviewer.review.claim_extraction import (
     MAX_CLAIMS,
     MAX_DESCRIPTION_CHARS,
@@ -33,11 +35,7 @@ MAX_STATEMENT_CHARS = 2_000
 class VerdictsRequest(BaseModel):
     pr_url: str = Field(min_length=1, max_length=MAX_URL_LENGTH)
     claims: list[Claim] = Field(min_length=1, max_length=MAX_CLAIMS)
-    provider: str | None = Field(
-        default=None,
-        pattern=r"^[a-z0-9_]{1,40}$",
-        description="A provider id from /api/providers. The first ready provider when omitted.",
-    )
+    provider: ProviderChoice = None
 
     @field_validator("claims")
     @classmethod
@@ -61,25 +59,6 @@ class VerdictsResponse(BaseModel, frozen=True):
     verdicts: VerdictSet
 
 
-def resolve_provider(providers: list[LLMProvider], provider_id: str | None) -> LLMProvider:
-    """The named provider, or the first one that's ready. Status checks are local and cheap."""
-    if provider_id is not None:
-        chosen = next((provider for provider in providers if provider.id == provider_id), None)
-        if chosen is None:
-            raise ProviderUnavailableError("That model provider isn't set up on this runner.")
-        status = chosen.status()
-        if not status.available:
-            raise ProviderUnavailableError(f"{status.name} isn't ready. {status.detail}")
-        return chosen
-
-    statuses = [(provider, provider.status()) for provider in providers]
-    for provider, status in statuses:
-        if status.available:
-            return provider
-    details = " ".join(status.detail for _, status in statuses)
-    raise ProviderUnavailableError(f"No model provider is ready. {details}".strip())
-
-
 def ensure_grounded(claims: list[Claim], snapshot: PullRequestSnapshot) -> None:
     haystack = grounding_text(snapshot.title, snapshot.body)
     if not all(is_grounded(claim.quote, haystack) for claim in claims):
@@ -101,8 +80,10 @@ async def assess_claims(
     body: VerdictsRequest, request: Request, source: SnapshotSourceDep
 ) -> VerdictsResponse:
     ref = parse_pull_request_url(body.pr_url)
-    provider = resolve_provider(request.app.state.providers, body.provider)
+    # Same rules as /api/claims, and resolved before calling GitHub so a bad choice fails fast.
+    providers: list[LLMProvider] = request.app.state.providers
+    assessor = ClaimAssessor(select_provider(providers, body.provider))
     snapshot = await source.fetch_snapshot(ref)
     ensure_grounded(body.claims, snapshot)
-    verdicts = await ClaimAssessor(provider).assess(snapshot, body.claims)
+    verdicts = await assessor.assess(snapshot, body.claims)
     return VerdictsResponse(snapshot=snapshot, verdicts=verdicts)

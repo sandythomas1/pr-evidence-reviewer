@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "./api";
 import { App } from "./App";
@@ -169,12 +169,17 @@ describe("App", () => {
     expect(screen.getByRole("option", { name: "Gemini CLI" })).toBeEnabled();
   });
 
-  it("finds claims with the chosen provider and names it with the claims", async () => {
+  it("finds and checks claims with the chosen provider and names it with each", async () => {
     const user = userEvent.setup();
-    const loadClaims = vi.fn(() =>
+    const found = {
+      snapshot: makeSnapshot(),
+      claims: makeClaimSet({ provider: "gemini", model: "gemini-2.5-pro" }),
+    };
+    const loadClaims = vi.fn(() => Promise.resolve(found));
+    const loadVerdicts = vi.fn(() =>
       Promise.resolve({
         snapshot: makeSnapshot(),
-        claims: makeClaimSet({ provider: "gemini", model: "gemini-2.5-pro" }),
+        verdicts: makeVerdictSet({ provider: "gemini", model: "gemini-2.5-pro" }),
       }),
     );
     render(
@@ -182,7 +187,7 @@ describe("App", () => {
         loadProviders={providers}
         loadSnapshot={() => Promise.resolve(makeSnapshot())}
         loadClaims={loadClaims}
-        loadVerdicts={neverChecked}
+        loadVerdicts={loadVerdicts}
       />,
     );
 
@@ -191,8 +196,35 @@ describe("App", () => {
     expect(select).toHaveAccessibleDescription(/free Google account/);
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
 
-    expect(await screen.findByText("Found by Gemini CLI, using gemini-2.5-pro.")).toBeVisible();
+    expect(await screen.findByText("Checked by Gemini CLI, using gemini-2.5-pro.")).toBeVisible();
+    expect(screen.getByText("Found by Gemini CLI, using gemini-2.5-pro.")).toBeVisible();
     expect(loadClaims).toHaveBeenCalledWith(LINK, "gemini");
+    expect(loadVerdicts).toHaveBeenCalledWith(LINK, found.claims.claims, "gemini");
+  });
+
+  it("checks with the provider the review started with, even if the choice changes", async () => {
+    const user = userEvent.setup();
+    const found = deferred<ClaimsResponse>();
+    const loadVerdicts = vi.fn(neverChecked);
+    render(
+      <App
+        loadProviders={providers}
+        loadSnapshot={() => Promise.resolve(makeSnapshot())}
+        loadClaims={() => found.promise}
+        loadVerdicts={loadVerdicts}
+      />,
+    );
+
+    const select = await screen.findByLabelText("Model provider");
+    await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
+    await screen.findByRole("heading", { name: "Add retry to the upload client" });
+    // The select is disabled while busy; change the choice directly to prove it isn't reread.
+    fireEvent.change(select, { target: { value: "gemini" } });
+    found.resolve({ snapshot: makeSnapshot(), claims: makeClaimSet() });
+
+    await waitFor(() => {
+      expect(loadVerdicts).toHaveBeenCalledWith(LINK, makeClaimSet().claims, "claude_code");
+    });
   });
 
   it("can't change the provider while a review is running", async () => {
@@ -248,7 +280,7 @@ describe("App", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Found 2 claims. Checking them against the diff…",
     );
-    expect(loadVerdicts).toHaveBeenCalledWith(LINK, found.claims.claims);
+    expect(loadVerdicts).toHaveBeenCalledWith(LINK, found.claims.claims, "claude_code");
     expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();
 
     checked.resolve({ snapshot: makeSnapshot(), verdicts: makeVerdictSet() });

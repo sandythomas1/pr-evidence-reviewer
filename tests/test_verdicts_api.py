@@ -153,19 +153,19 @@ def test_malformed_claims_are_a_422_before_any_network_call(claims: list[dict[st
     assert provider.requests == []
 
 
-def test_uses_the_named_provider() -> None:
-    first = FakeProvider()
-    named = FakeProvider(REPLY)
-    named.id = "other"
-    client = make_client(FakeGitHub(), first, named)
+def test_uses_the_chosen_provider_even_when_an_earlier_one_is_ready() -> None:
+    first = FakeProvider(REPLY, provider_id="first")
+    chosen = FakeProvider(REPLY, provider_id="chosen")
+    client = make_client(FakeGitHub(), first, chosen)
 
     response = client.post(
-        "/api/verdicts", json={"pr_url": PR_URL, "claims": CLAIMS, "provider": "other"}
+        "/api/verdicts", json={"pr_url": PR_URL, "claims": CLAIMS, "provider": "chosen"}
     )
 
     assert response.status_code == 200
+    assert response.json()["verdicts"]["provider"] == "chosen"
     assert first.requests == []
-    assert len(named.requests) == 1
+    assert len(chosen.requests) == 1
 
 
 def test_uses_the_first_ready_provider_when_none_is_named() -> None:
@@ -180,19 +180,38 @@ def test_uses_the_first_ready_provider_when_none_is_named() -> None:
     assert len(ready.requests) == 1
 
 
+def test_an_unknown_provider_is_a_422_before_github_is_called() -> None:
+    fake = FakeGitHub()
+    provider = FakeProvider(REPLY, name="Claude Code")
+    client = make_client(fake, provider)
+
+    response = client.post(
+        "/api/verdicts", json={"pr_url": PR_URL, "claims": CLAIMS, "provider": "nope"}
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "unknown_provider",
+            "message": "That model provider isn't offered here. Choose one of: Claude Code.",
+        }
+    }
+    assert fake.requests == []
+    assert provider.requests == []
+
+
 @pytest.mark.parametrize(
-    ("provider_id", "available", "message"),
+    ("provider_id", "message"),
     [
-        ("codex", True, "That model provider isn't set up on this runner."),
-        ("fake", False, "Fake model isn't ready. Not installed."),
-        (None, False, "No model provider is ready. Not installed."),
+        ("fake", "Not installed."),
+        (None, "No model provider is ready. Not installed."),
     ],
 )
 def test_a_provider_that_is_not_ready_is_a_503_before_github_is_called(
-    provider_id: str | None, available: bool, message: str
+    provider_id: str | None, message: str
 ) -> None:
     fake = FakeGitHub()
-    client = make_client(fake, FakeProvider(available=available))
+    client = make_client(fake, FakeProvider(available=False))
 
     response = client.post(
         "/api/verdicts", json={"pr_url": PR_URL, "claims": CLAIMS, "provider": provider_id}
@@ -203,15 +222,18 @@ def test_a_provider_that_is_not_ready_is_a_503_before_github_is_called(
     assert fake.requests == []
 
 
-@pytest.mark.parametrize("provider_id", ["", "Fake", "../fake", "x" * 41])
-def test_a_malformed_provider_id_is_a_422(provider_id: str) -> None:
-    client = make_client(FakeGitHub(), FakeProvider())
+@pytest.mark.parametrize("provider_id", ["", "x" * 65, 7])
+def test_rejects_a_provider_that_isnt_a_short_string(provider_id: object) -> None:
+    fake = FakeGitHub()
+    client = make_client(fake, FakeProvider())
 
     response = client.post(
         "/api/verdicts", json={"pr_url": PR_URL, "claims": CLAIMS, "provider": provider_id}
     )
 
     assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_request"
+    assert fake.requests == []
 
 
 def test_provider_errors_use_the_error_envelope_never_a_verdict() -> None:

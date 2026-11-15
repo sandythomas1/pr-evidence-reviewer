@@ -28,7 +28,11 @@ type State =
 interface Props {
   loadSnapshot?: (prUrl: string) => Promise<PullRequestSnapshot>;
   loadClaims?: (prUrl: string, providerId: string | null) => Promise<ClaimsResponse>;
-  loadVerdicts?: (prUrl: string, claims: Claim[]) => Promise<VerdictsResponse>;
+  loadVerdicts?: (
+    prUrl: string,
+    claims: Claim[],
+    providerId: string | null,
+  ) => Promise<VerdictsResponse>;
   loadProviders?: () => Promise<ProviderStatus[]>;
 }
 
@@ -99,6 +103,8 @@ export function App({
   }, [loadProviders]);
 
   async function load(prUrl: string) {
+    // One review uses one provider: the choice when it started, for the claims and the verdicts.
+    const chosenProvider = providerId;
     setState({ kind: "loading" });
     let snapshot: PullRequestSnapshot;
     try {
@@ -112,7 +118,7 @@ export function App({
     setState({ kind: "loaded", snapshot, claims: { kind: "loading" }, verdicts: idle });
     let found: ClaimsResponse;
     try {
-      found = await loadClaims(prUrl, providerId);
+      found = await loadClaims(prUrl, chosenProvider);
     } catch (error) {
       setState({
         kind: "loaded",
@@ -130,7 +136,7 @@ export function App({
     }
     setState({ kind: "loaded", snapshot: found.snapshot, claims, verdicts: { kind: "loading" } });
     try {
-      const checked = await loadVerdicts(prUrl, found.claims.claims);
+      const checked = await loadVerdicts(prUrl, found.claims.claims, chosenProvider);
       // Every citation refers to the commit the verdicts were checked at, so show that snapshot.
       setState({
         kind: "loaded",
@@ -189,6 +195,11 @@ export function App({
             providerName={
               state.claims.kind === "loaded"
                 ? providerName(providers, state.claims.claims.provider)
+                : null
+            }
+            verdictsProviderName={
+              state.verdicts.kind === "loaded"
+                ? providerName(providers, state.verdicts.verdicts.provider)
                 : null
             }
           />

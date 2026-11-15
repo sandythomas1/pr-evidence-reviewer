@@ -114,6 +114,19 @@ describe("ClaimsView", () => {
       expect(screen.queryByText(/None of these has been checked/)).not.toBeInTheDocument();
     });
 
+    it("names the provider and model that checked the claims", () => {
+      const verdicts = makeVerdictSet({ provider: "codex", model: "gpt-5-codex" });
+      render(
+        <ClaimsView
+          state={claims}
+          verdicts={{ kind: "loaded", verdicts, repo }}
+          verdictsProviderName="Codex"
+        />,
+      );
+
+      expect(screen.getByText("Checked by Codex, using gpt-5-codex.")).toBeInTheDocument();
+    });
+
     it("marks a claim the model skipped as analysis failed", () => {
       const verdicts = makeVerdictSet();
       verdicts.verdicts = verdicts.verdicts.slice(0, 1);

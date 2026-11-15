@@ -1,9 +1,10 @@
 """POST /api/claims: the PR snapshot plus the claims pulled from its title and description."""
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from pr_evidence_reviewer.api.errors import ErrorResponse
+from pr_evidence_reviewer.api.providers import ProviderChoice
 from pr_evidence_reviewer.api.snapshots import SnapshotRequest, SnapshotSourceDep
 from pr_evidence_reviewer.domain.claims import ClaimSet
 from pr_evidence_reviewer.domain.pull_request import PullRequestSnapshot, parse_pull_request_url
@@ -11,16 +12,9 @@ from pr_evidence_reviewer.llm.base import LLMProvider
 from pr_evidence_reviewer.llm.selection import select_provider
 from pr_evidence_reviewer.review.claim_extraction import ClaimExtractor
 
-MAX_PROVIDER_ID_LENGTH = 64
-
 
 class ClaimsRequest(SnapshotRequest):
-    provider: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=MAX_PROVIDER_ID_LENGTH,
-        description="A provider id from GET /api/providers. Omit it to use the first ready one.",
-    )
+    provider: ProviderChoice = None
 
 
 class ClaimsResponse(BaseModel, frozen=True):

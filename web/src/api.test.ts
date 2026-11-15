@@ -90,6 +90,21 @@ describe("fetchClaims with a chosen provider", () => {
   });
 });
 
+describe("fetchVerdicts with a chosen provider", () => {
+  it("sends the provider id with the link and the claims", async () => {
+    const fetchImpl = respond(200, { snapshot: makeSnapshot(), verdicts: makeVerdictSet() });
+    const { claims } = makeClaimSet();
+
+    await fetchVerdicts(LINK, claims, "codex", fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledWith("/api/verdicts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pr_url: LINK, claims, provider: "codex" }),
+    });
+  });
+});
+
 describe("fetchProviders", () => {
   it("reads the provider list from the runner", async () => {
     const providers = makeProviders();
@@ -112,7 +127,7 @@ describe("fetchVerdicts", () => {
     const fetchImpl = respond(200, reply);
     const { claims } = makeClaimSet();
 
-    await expect(fetchVerdicts(LINK, claims, fetchImpl)).resolves.toEqual(reply);
+    await expect(fetchVerdicts(LINK, claims, null, fetchImpl)).resolves.toEqual(reply);
     expect(fetchImpl).toHaveBeenCalledWith("/api/verdicts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -125,7 +140,7 @@ describe("fetchVerdicts", () => {
       error: { code: "claims_out_of_date", message: "Load the pull request again." },
     });
 
-    const error: unknown = await fetchVerdicts(LINK, makeClaimSet().claims, fetchImpl).catch(
+    const error: unknown = await fetchVerdicts(LINK, makeClaimSet().claims, null, fetchImpl).catch(
       (e: unknown) => e,
     );
 

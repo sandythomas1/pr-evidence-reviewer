@@ -92,11 +92,19 @@ export function fetchClaims(
   return postJson<ClaimsResponse>("/api/claims", payload, fetchImpl);
 }
 
-/** Slow too: the runner fetches the pull request again and asks the model to check each claim. */
+/**
+ * Slow too: the runner fetches the pull request again and asks the model to check each claim.
+ * Pass the same provider id as fetchClaims so one model handles the whole review.
+ */
 export function fetchVerdicts(
   prUrl: string,
   claims: Claim[],
+  providerId: string | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<VerdictsResponse> {
-  return postJson<VerdictsResponse>("/api/verdicts", { pr_url: prUrl, claims }, fetchImpl);
+  const payload =
+    providerId === null
+      ? { pr_url: prUrl, claims }
+      : { pr_url: prUrl, claims, provider: providerId };
+  return postJson<VerdictsResponse>("/api/verdicts", payload, fetchImpl);
 }
