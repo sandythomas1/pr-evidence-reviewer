@@ -1,4 +1,5 @@
-import type { ClaimKind, ClaimSet } from "../types";
+import type { Claim, ClaimKind, ClaimSet } from "../types";
+import { AnalysisFailed, ClaimVerdictView, type VerdictsState } from "./VerdictView";
 
 const KIND_LABELS: Record<ClaimKind, string> = {
   behavior: "Behavior",
@@ -10,23 +11,100 @@ const KIND_LABELS: Record<ClaimKind, string> = {
   other: "Other",
 };
 
+const NOT_ASSESSED = "The model didn't return an assessment for this claim.";
+const NOT_CHECKED = "This claim couldn't be checked, so it has no verdict.";
+
 export type ClaimsState =
   { kind: "loading" } | { kind: "error"; message: string } | { kind: "loaded"; claims: ClaimSet };
 
 interface Props {
   state: ClaimsState;
+  verdicts?: VerdictsState;
   /** The display name for the provider id in the claim set, when the runner listed it. */
   providerName?: string | null;
+  /** The same, for the provider id in the verdict set. */
+  verdictsProviderName?: string | null;
 }
 
-function foundBy(providerName: string | null, provider: string | null, model: string | null) {
+/** For example "Found by Claude Code, using claude-opus-5-5." */
+function attribution(
+  verb: "Found" | "Checked",
+  providerName: string | null,
+  provider: string | null,
+  model: string | null,
+) {
   if (providerName)
-    return model ? `Found by ${providerName}, using ${model}.` : `Found by ${providerName}.`;
+    return model ? `${verb} by ${providerName}, using ${model}.` : `${verb} by ${providerName}.`;
   const fallback = model ?? provider;
-  return fallback ? `Found by ${fallback}.` : null;
+  return fallback ? `${verb} by ${fallback}.` : null;
 }
 
-function Body({ state, providerName = null }: Props) {
+function ClaimAssessment({ claim, verdicts }: { claim: Claim; verdicts: VerdictsState }) {
+  if (verdicts.kind === "error") return <AnalysisFailed reason={NOT_CHECKED} />;
+  if (verdicts.kind !== "loaded") return null;
+  const { verdicts: set, repo } = verdicts;
+  const verdict = set.verdicts.find((item) => item.claim_id === claim.id);
+  if (!verdict) return <AnalysisFailed reason={NOT_ASSESSED} />;
+  return <ClaimVerdictView verdict={verdict} repo={repo} headSha={set.head_sha} />;
+}
+
+function VerdictsSummary({ verdicts }: { verdicts: VerdictsState }) {
+  if (verdicts.kind === "idle") {
+    return (
+      <p className="hint">
+        What the pull request says it does, in the author&apos;s words. None of these has been
+        checked against the code yet.
+      </p>
+    );
+  }
+  if (verdicts.kind === "loading") {
+    return (
+      <p className="hint">
+        Checking each claim against the diff and the CI checks. This can take a minute…
+      </p>
+    );
+  }
+  if (verdicts.kind === "error") {
+    return (
+      <div className="error" role="alert">
+        Couldn&apos;t check the claims. {verdicts.message}
+      </div>
+    );
+  }
+
+  const { notes, scope_limitations: notChecked } = verdicts.verdicts;
+  return (
+    <>
+      <p className="hint">
+        Each verdict covers only the diff and the CI checks at this commit. Reading code can&apos;t
+        prove how it runs, and a test in the diff isn&apos;t proof that it ran. You make the
+        approval decision.
+      </p>
+      {notes.map((note) => (
+        <p key={note} className="note">
+          {note}
+        </p>
+      ))}
+      {notChecked.length > 0 && (
+        <section aria-labelledby="verdicts-gaps-title" className="gaps">
+          <h4 id="verdicts-gaps-title">Not checked</h4>
+          <ul>
+            {notChecked.map((gap) => (
+              <li key={gap}>{gap}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
+}
+
+function Body({
+  state,
+  verdicts = { kind: "idle" },
+  providerName = null,
+  verdictsProviderName = null,
+}: Props) {
   if (state.kind === "loading") {
     return <p className="hint">Reading the description and pulling out its claims…</p>;
   }
@@ -39,15 +117,19 @@ function Body({ state, providerName = null }: Props) {
   }
 
   const { claims, notes, scope_limitations: notRead, model, provider } = state.claims;
-  const found = foundBy(providerName, provider, model);
+  const found = attribution("Found", providerName, provider, model);
+  const checked =
+    verdicts.kind === "loaded"
+      ? attribution(
+          "Checked",
+          verdictsProviderName,
+          verdicts.verdicts.provider,
+          verdicts.verdicts.model,
+        )
+      : null;
   return (
     <>
-      {claims.length > 0 && (
-        <p className="hint">
-          What the pull request says it does, in the author&apos;s words. None of these has been
-          checked against the code yet.
-        </p>
-      )}
+      {claims.length > 0 && <VerdictsSummary verdicts={verdicts} />}
       {notes.map((note) => (
         <p key={note} className="note">
           {note}
@@ -70,25 +152,37 @@ function Body({ state, providerName = null }: Props) {
               <span className="badge neutral">{KIND_LABELS[claim.kind]}</span>
               <p className="statement">{claim.statement}</p>
               <blockquote>{claim.quote}</blockquote>
+              <ClaimAssessment claim={claim} verdicts={verdicts} />
             </li>
           ))}
         </ol>
       )}
       {found && <p className="hint">{found}</p>}
+      {checked && <p className="hint">{checked}</p>}
     </>
   );
 }
 
-export function ClaimsView({ state, providerName = null }: Props) {
+export function ClaimsView({
+  state,
+  verdicts = { kind: "idle" },
+  providerName = null,
+  verdictsProviderName = null,
+}: Props) {
   const count = state.kind === "loaded" ? ` (${String(state.claims.claims.length)})` : "";
   return (
     <section
       className="claims-section"
       aria-labelledby="claims-title"
-      aria-busy={state.kind === "loading"}
+      aria-busy={state.kind === "loading" || verdicts.kind === "loading"}
     >
       <h3 id="claims-title">Claims{count}</h3>
-      <Body state={state} providerName={providerName} />
+      <Body
+        state={state}
+        verdicts={verdicts}
+        providerName={providerName}
+        verdictsProviderName={verdictsProviderName}
+      />
     </section>
   );
 }

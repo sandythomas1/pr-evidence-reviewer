@@ -76,3 +76,50 @@ export interface ProviderStatus {
   available: boolean;
   detail: string;
 }
+
+/** Mirrors pr_evidence_reviewer.domain.verdicts. */
+export type ClaimStatus =
+  "supported" | "contradicted" | "insufficient_evidence" | "analysis_failed";
+
+export interface DiffCitation {
+  kind: "diff";
+  path: string;
+  start_line: number;
+  end_line: number;
+}
+
+export interface CheckCitation {
+  kind: "check";
+  name: string;
+  source: "check_run" | "status";
+  status: string;
+  conclusion: string | null;
+}
+
+export type Citation = DiffCitation | CheckCitation;
+
+export interface ClaimVerdict {
+  claim_id: string;
+  status: ClaimStatus;
+  explanation: string;
+  citations: Citation[];
+  missing_tests: string[];
+  edge_cases: string[];
+  dropped_citations: number;
+  notes: string[];
+}
+
+export interface VerdictSet {
+  head_sha: string;
+  verdicts: ClaimVerdict[];
+  dropped_citations: number;
+  notes: string[];
+  scope_limitations: string[];
+  provider: string | null;
+  model: string | null;
+}
+
+export interface VerdictsResponse {
+  snapshot: PullRequestSnapshot;
+  verdicts: VerdictSet;
+}

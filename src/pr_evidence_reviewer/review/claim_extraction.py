@@ -109,18 +109,28 @@ def keep_grounded_claims(extracted: list[ExtractedClaim], pr_text: str) -> tuple
     haystack = normalize_whitespace(pr_text)
     kept: list[Claim] = []
     for item in extracted:
-        quote = normalize_whitespace(item.quote)
-        if not quote or quote not in haystack or not item.statement.strip():
+        if not is_grounded(item.quote, haystack) or not item.statement.strip():
             continue
         kept.append(
             Claim(
                 id=f"c{len(kept) + 1}",
-                quote=quote,
+                quote=normalize_whitespace(item.quote),
                 statement=item.statement.strip(),
                 kind=item.kind,
             )
         )
     return kept, len(extracted) - len(kept)
+
+
+def grounding_text(title: str, body: str) -> str:
+    """The PR text a quote must come from: the title and the part of the description that's read."""
+    return normalize_whitespace(f"{title}\n{body[:MAX_DESCRIPTION_CHARS]}")
+
+
+def is_grounded(quote: str, haystack: str) -> bool:
+    """True when the quote appears in the normalized PR text, ignoring differences in whitespace."""
+    normalized = normalize_whitespace(quote)
+    return bool(normalized) and normalized in haystack
 
 
 def normalize_whitespace(text: str) -> str:
