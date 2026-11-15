@@ -14,6 +14,7 @@ from pr_evidence_reviewer.github.client import GitHubClient
 from pr_evidence_reviewer.github.token import GhCliTokenProvider
 from pr_evidence_reviewer.llm.base import LLMProvider
 from pr_evidence_reviewer.llm.claude_code import ClaudeCodeProvider
+from pr_evidence_reviewer.llm.codex import CodexProvider
 
 
 class HealthResponse(BaseModel):
@@ -41,7 +42,9 @@ def create_app(
     app = FastAPI(title="PR Evidence Reviewer", version=__version__)
     app.state.settings = settings
     app.state.snapshot_source = snapshot_source or GitHubClient(GhCliTokenProvider())
-    app.state.providers = providers if providers is not None else [ClaudeCodeProvider()]
+    app.state.providers = (
+        providers if providers is not None else [ClaudeCodeProvider(), CodexProvider()]
+    )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     install_security_headers(app)
     install_error_handlers(app)

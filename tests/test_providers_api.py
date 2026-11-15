@@ -17,3 +17,10 @@ def test_lists_each_provider_with_its_availability() -> None:
     assert claude["available"] is False
     assert "isn't installed" in claude["detail"]
     assert fake == {"id": "fake", "name": "Fake model", "available": True, "detail": "Ready."}
+
+
+def test_signed_in_cli_providers_are_offered_by_default_in_order() -> None:
+    response = local_client(create_app()).get("/api/providers")
+
+    assert response.status_code == 200
+    assert [provider["id"] for provider in response.json()] == ["claude_code", "codex"]
