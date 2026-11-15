@@ -2,7 +2,7 @@
 
 import asyncio
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -35,6 +35,7 @@ class ProcessRunner(Protocol):
         cwd: Path,
         timeout: float,
         max_output_bytes: int,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult: ...
 
 
@@ -49,6 +50,7 @@ class AsyncProcessRunner:
         cwd: Path,
         timeout: float,
         max_output_bytes: int,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         process = await asyncio.create_subprocess_exec(
             *argv,
@@ -56,6 +58,7 @@ class AsyncProcessRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            env=None if env is None else dict(env),
         )
         if process.stdin is None or process.stdout is None or process.stderr is None:
             await _kill(process)

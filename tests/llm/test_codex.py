@@ -1,5 +1,5 @@
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +90,7 @@ class FileReadingRunner(StubRunner):
         cwd: Path,
         timeout: float,
         max_output_bytes: int,
+        env: Mapping[str, str] | None = None,
     ) -> ProcessResult:
         self.sibling_files = {
             entry.name: entry.read_text(encoding="utf-8")
@@ -97,14 +98,23 @@ class FileReadingRunner(StubRunner):
             if entry.is_file()
         }
         return await super().run(
-            argv, stdin=stdin, cwd=cwd, timeout=timeout, max_output_bytes=max_output_bytes
+            argv,
+            stdin=stdin,
+            cwd=cwd,
+            timeout=timeout,
+            max_output_bytes=max_output_bytes,
+            env=env,
         )
+
+
+ENVIRON = {"PATH": "C:/Windows/System32", "USERPROFILE": "C:/Users/someone"}
 
 
 def provider(
     result: ProcessResult | Exception, **kwargs: Any
 ) -> tuple[CodexProvider, FileReadingRunner]:
     runner = FileReadingRunner(result)
+    kwargs.setdefault("environ", ENVIRON)
     return CodexProvider(which=lambda _: CODEX, runner=runner, **kwargs), runner
 
 
@@ -168,6 +178,35 @@ async def test_disables_tools_extensions_and_extra_context() -> None:
     assert overrides["history.persistence"] == '"none"'
     assert overrides["skills.include_instructions"] == "false"
     assert overrides["include_environment_context"] == "false"
+    assert overrides["approval_policy"] == '"never"'
+
+
+async def test_gets_only_the_allowed_environment_so_api_keys_and_tokens_stay_out() -> None:
+    environ = {
+        "Path": "C:/Windows/System32",
+        "USERPROFILE": "C:/Users/someone",
+        "APPDATA": "C:/Users/someone/AppData/Roaming",
+        "CODEX_HOME": "C:/Users/someone/.codex",
+        "HTTPS_PROXY": "http://proxy.example:8080",
+        "CODEX_API_KEY": "placeholder",
+        "OPENAI_API_KEY": "placeholder",
+        "OPENAI_BASE_URL": "https://elsewhere.example",
+        "GH_TOKEN": "placeholder",
+        "GITHUB_TOKEN": "placeholder",
+        "ANTHROPIC_API_KEY": "placeholder",
+        "GEMINI_API_KEY": "placeholder",
+    }
+    codex, runner = provider(ok(), environ=environ)
+
+    await codex.complete_structured(REQUEST)
+
+    assert runner.env == {
+        "Path": "C:/Windows/System32",
+        "USERPROFILE": "C:/Users/someone",
+        "APPDATA": "C:/Users/someone/AppData/Roaming",
+        "CODEX_HOME": "C:/Users/someone/.codex",
+        "HTTPS_PROXY": "http://proxy.example:8080",
+    }
 
 
 async def test_system_prompt_and_strict_schema_go_in_files_beside_an_empty_workspace() -> None:
@@ -204,6 +243,16 @@ async def test_the_temporary_directory_is_removed() -> None:
 
     assert runner.cwd is not None
     assert runner.cwd != Path.cwd()
+    assert not runner.cwd.parent.exists()
+
+
+async def test_the_temporary_directory_is_removed_when_codex_fails() -> None:
+    codex, runner = provider(ProcessResult(returncode=1, stdout=b"", stderr=b"boom"))
+
+    with pytest.raises(ProviderFailedError):
+        await codex.complete_structured(REQUEST)
+
+    assert runner.cwd is not None
     assert not runner.cwd.parent.exists()
 
 
@@ -347,14 +396,29 @@ async def test_missing_cli_is_unavailable_without_running_anything() -> None:
     assert runner.argv == []
 
 
-@pytest.mark.parametrize("wrapper", ["codex.cmd", "CODEX.BAT"])
-async def test_batch_file_installs_are_refused(wrapper: str) -> None:
+@pytest.mark.parametrize("wrapper", ["codex.cmd", "CODEX.BAT", "codex.ps1"])
+async def test_script_wrapper_installs_are_refused(wrapper: str) -> None:
     runner = StubRunner(ok())
     codex = CodexProvider(which=lambda _: f"C:/npm/{wrapper}", runner=runner)
 
-    with pytest.raises(ProviderUnavailableError, match="batch file"):
+    with pytest.raises(ProviderUnavailableError, match="script wrapper"):
         await codex.complete_structured(REQUEST)
     assert runner.argv == []
+
+
+async def test_a_codex_in_the_start_folder_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    planted = tmp_path / "codex.exe"
+    planted.write_bytes(b"")
+    runner = StubRunner(ok())
+    codex = CodexProvider(which=lambda _: str(planted), runner=runner)
+
+    with pytest.raises(ProviderUnavailableError, match="folder the reviewer was started from"):
+        await codex.complete_structured(REQUEST)
+    assert runner.argv == []
+    assert not codex.status().available
 
 
 def test_status_reports_installed_and_missing_cli() -> None:

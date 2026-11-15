@@ -15,29 +15,38 @@ Disabled:
 - `~/.codex/config.toml` (`--ignore-user-config`): MCP servers, profiles, plugins, notify hooks, and
   the person's default model. Execpolicy `.rules` files (`--ignore-rules`).
 - Shell and exec tools, apps and plugins (connector tools), hooks, browser and computer use, image
-  generation and viewing, goals, tool suggestions, skill search, sub-agent delegation, and memories,
-  through `--disable <feature>` (see `ALWAYS_DISABLED_FEATURES`).
+  generation and viewing, goals, tool suggestions, skill search, and memories, through
+  `--disable <feature>` (see `ALWAYS_DISABLED_FEATURES`).
+- Approval prompts (`approval_policy="never"`): anything the sandbox blocks fails instead of waiting.
 - Web search (`web_search="disabled"`).
 - AGENTS.md files in the working directory (`project_doc_max_bytes=0`; the directory is empty anyway).
 - The skills list, the sandbox-permissions text, the environment context (which names the working
   directory), and the apps and collaboration-mode instructions, through the `include_*` overrides.
 - Saved sessions and prompt history (`--ephemeral`, `history.persistence="none"`). The environment
   given to any shell command is empty (`shell_environment_policy.inherit="none"`).
+- API keys and other secrets in the reviewer's environment: Codex gets only an allowlist (see
+  `cli_env.py` plus `CODEX_HOME`), so it can't bill `CODEX_API_KEY` or `OPENAI_API_KEY` instead of the
+  sign-in, and never sees a GitHub token.
 
 Not disabled (no flag or override exists in 0.167):
 - The global `AGENTS.md` in the Codex home directory is still sent as user-level instructions. It is
   the person's own file, not PR text, and our instructions arrive with higher (developer) priority.
 - Some built-in tools stay listed: the JavaScript `exec` orchestrator (no file system or network),
   `apply_patch` (blocked by the read-only sandbox, and the workspace is empty), MCP resource listing
-  (no MCP servers are loaded), user-input requests (unanswerable in exec mode), a clock and a sleep
-  tool, and the sub-agent tools, whose agents inherit the same read-only sandbox.
+  (no MCP servers are loaded), user-input requests (unanswerable in exec mode), and a clock and a
+  sleep tool.
+- The sub-agent tools (`spawn_agent`, `wait_agent`, `send_message`, `followup_task`,
+  `interrupt_agent`, `list_agents`). `--disable multi_agent` is passed, but 0.167 still lists them
+  even with every feature switched off. Sub-agents get the same instructions, the same read-only
+  sandbox, and no more tools than the main agent.
 """
 
 import json
 import logging
+import os
 import shutil
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +65,7 @@ from pr_evidence_reviewer.llm.base import (
     Usage,
     validate_output,
 )
+from pr_evidence_reviewer.llm.cli_env import allowlisted_environment, refuse_if_in_start_folder
 from pr_evidence_reviewer.llm.process import (
     AsyncProcessRunner,
     OutputTooLargeError,
@@ -107,7 +117,9 @@ CONFIG_OVERRIDES = (
     "skills.include_instructions=false",
     'history.persistence="none"',
     'shell_environment_policy.inherit="none"',
+    'approval_policy="never"',
 )
+CODEX_ENV_NAMES = ("CODEX_HOME",)
 
 _SIGNED_OUT_MARKERS = (
     "not logged in",
@@ -118,8 +130,8 @@ _SIGNED_OUT_MARKERS = (
     "log in again",
 )
 _UNSUPPORTED_SETTING_MARKERS = ("unknown configuration field", "unknown feature flag")
-# Batch files re-parse their arguments through cmd.exe, which would mangle the quoted overrides.
-_SHELL_WRAPPERS = frozenset({".cmd", ".bat"})
+# Batch files and PowerShell scripts re-parse their arguments, which would mangle the quoted overrides.
+_SHELL_WRAPPERS = frozenset({".cmd", ".bat", ".ps1"})
 
 
 def build_argv(
@@ -165,12 +177,14 @@ class CodexProvider:
         model: str | None = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+        environ: Mapping[str, str] | None = None,
     ) -> None:
         self._which = which
         self._runner = runner or AsyncProcessRunner()
         self._model = model
         self._timeout = timeout
         self._max_output_bytes = max_output_bytes
+        self._environ = os.environ if environ is None else environ
 
     def status(self) -> ProviderStatus:
         try:
@@ -203,10 +217,11 @@ class CodexProvider:
             raise ProviderUnavailableError(f"Codex isn't installed. {INSTALL_HINT}")
         if Path(executable).suffix.lower() in _SHELL_WRAPPERS:
             raise ProviderUnavailableError(
-                "This Codex install runs through a batch file, which can't be called safely. "
+                "This Codex install runs through a script wrapper, which can't be called safely. "
                 "Install the native build from https://developers.openai.com/codex/cli, then try "
                 "again."
             )
+        refuse_if_in_start_folder(executable, self.name)
         return executable
 
     async def _run(self, argv: list[str], stdin: bytes, cwd: Path) -> ProcessResult:
@@ -217,6 +232,7 @@ class CodexProvider:
                 cwd=cwd,
                 timeout=self._timeout,
                 max_output_bytes=self._max_output_bytes,
+                env=allowlisted_environment(self._environ, CODEX_ENV_NAMES),
             )
         except ProcessTimeoutError as error:
             raise ProviderTimeoutError(

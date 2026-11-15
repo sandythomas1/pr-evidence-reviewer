@@ -1,5 +1,6 @@
 """The real subprocess runner, exercised with small Python scripts we control."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -41,6 +42,26 @@ async def test_runs_in_the_given_directory(tmp_path: Path) -> None:
     result = await run("import os; print(os.getcwd(), end='')", tmp_path)
 
     assert Path(result.stdout.decode()).resolve() == tmp_path.resolve()
+
+
+async def test_inherits_the_environment_by_default(tmp_path: Path) -> None:
+    result = await run("import os; print('PATH' in os.environ, end='')", tmp_path)
+
+    assert result.stdout == b"True"
+
+
+async def test_passes_the_given_environment_instead(tmp_path: Path) -> None:
+    env = {"SYSTEMROOT": os.environ.get("SYSTEMROOT", ""), "PREV_MARKER": "set"}
+    result = await AsyncProcessRunner().run(
+        python("import os; print(os.environ.get('PREV_MARKER'), 'PATH' in os.environ, end='')"),
+        stdin=b"",
+        cwd=tmp_path,
+        timeout=10,
+        max_output_bytes=10_000,
+        env=env,
+    )
+
+    assert result.stdout == b"set False"
 
 
 async def test_reports_the_exit_code_and_stderr(tmp_path: Path) -> None:
