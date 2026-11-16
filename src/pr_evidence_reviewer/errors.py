@@ -1,0 +1,79 @@
+"""Errors the runner reports to the user.
+
+Each error carries a stable `code` for the API envelope and a message written for the person using the
+tool. Messages must never contain a token, key, or other secret.
+"""
+
+
+class ReviewerError(Exception):
+    """Base class for errors that are safe to show to the user."""
+
+    code = "internal_error"
+    http_status = 500
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class InvalidPullRequestUrlError(ReviewerError):
+    code = "invalid_pr_url"
+    http_status = 422
+
+
+class GitHubAuthError(ReviewerError):
+    code = "github_auth"
+    http_status = 401
+
+
+class GitHubNotFoundError(ReviewerError):
+    code = "github_not_found"
+    http_status = 404
+
+
+class GitHubRateLimitedError(ReviewerError):
+    code = "github_rate_limited"
+    http_status = 429
+
+
+class GitHubUnavailableError(ReviewerError):
+    code = "github_unavailable"
+    http_status = 502
+
+
+class ClaimsOutOfDateError(ReviewerError):
+    """The claims sent for checking no longer match the pull request's current text."""
+
+    code = "claims_out_of_date"
+    http_status = 409
+
+
+class ProviderUnavailableError(ReviewerError):
+    """The model provider isn't installed, isn't signed in, or can't be started."""
+
+    code = "llm_unavailable"
+    http_status = 503
+
+
+class ProviderTimeoutError(ReviewerError):
+    code = "llm_timeout"
+    http_status = 504
+
+
+class ProviderInvalidOutputError(ReviewerError):
+    """The model's reply didn't match the schema. Never turned into a partial result."""
+
+    code = "llm_invalid_output"
+    http_status = 502
+
+
+class ProviderFailedError(ReviewerError):
+    code = "llm_failed"
+    http_status = 502
+
+
+class UnknownProviderError(ReviewerError):
+    """The request named a model provider this runner doesn't offer."""
+
+    code = "unknown_provider"
+    http_status = 422

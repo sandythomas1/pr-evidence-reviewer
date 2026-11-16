@@ -25,8 +25,8 @@ as a gap, never as approval.
 
 - **Local-first.** A runner on your machine reads GitHub through your existing `gh` sign-in and serves
   the report on `localhost`. Your code and credentials stay on your computer.
-- **Bring your own LLM.** Use your signed-in Claude Code or Codex CLI (your subscription), a local model
-  through Ollama, or an API key for Anthropic, OpenAI, or Gemini.
+- **Bring your own LLM.** Use your signed-in Claude Code, Codex, or Gemini CLI (your subscription or
+  Google account), a local model through Ollama, or an API key for Anthropic, OpenAI, or Gemini.
 - **Any language.** Evidence comes from the diff, a read-only checkout, test-file conventions, and CI
   checks, with deeper symbol lookup for common languages.
 - **Two review modes.** *Standard* gives every provider the same evidence packet, so results are
@@ -37,6 +37,31 @@ as a gap, never as approval.
 
 Design: [`docs/design/PR_Evidence_Reviewer_Full_Flow.drawio`](docs/design/PR_Evidence_Reviewer_Full_Flow.drawio)
 · Decisions: [`docs/decisions/`](docs/decisions/)
+
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/), Python 3.12+, Node 24, and a signed-in [GitHub CLI](https://cli.github.com/) (`gh auth login`).
+
+```sh
+uv sync                 # install the runner and dev tools
+npm --prefix web ci     # install the web UI's tools
+npm --prefix web run build
+uv run prev serve       # open http://127.0.0.1:8765
+```
+
+Checks:
+
+```sh
+uv run pytest
+uv run ruff check . && uv run black --check . && uv run mypy
+npm --prefix web run lint && npm --prefix web test
+```
+
+For UI work, run `uv run prev serve` in one terminal and `npm --prefix web run dev` in another. Vite
+serves the UI with hot reload and forwards `/api` to the runner.
+
+The runner only answers requests addressed to `localhost`, `127.0.0.1`, or `[::1]`, so a web page can't
+reach it through DNS rebinding.
 
 ## Contributing
 
