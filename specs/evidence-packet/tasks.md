@@ -1,6 +1,6 @@
 # Tasks: Evidence packet (Week 2, #12–#17)
 
-> **Phase:** Tasks · **Status:** done (task 41 [~] until Linux/macOS CI is green) · **Date:** 2026-11-16
+> **Phase:** Tasks · **Status:** done (task 41 [~]: Python gate green on Linux, macOS and Windows in PR #51 CI; web gate green locally, CI install blocked by #53) · **Date:** 2026-11-16
 > Derived from `plan.md` (adjudication applied). One commit per issue, in order #12 → #13 → #14 → #15 → #17 → #16.
 > Every implementer task ships its own unit tests; the `@qa` tasks are the adversarial/hermetic suites and must pass
 > before the issue's commit. Network, git and real repos are never used in tests (MockTransport, crafted tar.gz).

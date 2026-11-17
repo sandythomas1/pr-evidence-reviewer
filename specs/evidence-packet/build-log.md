@@ -226,3 +226,6 @@ token, path traversal, ReDoS), domain (evidence-gap semantics, verdict downgrade
 - Dispatches: 15 fresh (one critic lost in the crash) plus 11 SendMessage continuations, 26 in total.
 - Remaining: task 41 `[~]` until PR #51's CI is green on Linux and macOS. Delete docs/current_feature_plans/evidence-packet.md
   once #51 merges.
+- PR #51 CI: Python 3.12 (ubuntu, macOS, Windows) and 3.13 pass. Web UI fails at `npm ci` with a lockfile out of sync
+  (`@emnapi/*` missing). It has failed the same way on dev since #49, and this PR doesn't touch web/package*.json.
+  Filed #53 (L1, out of scope). Task 41 stays `[~]` only for the web gate on CI.
