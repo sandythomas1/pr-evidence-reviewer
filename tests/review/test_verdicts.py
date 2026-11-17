@@ -56,6 +56,7 @@ def assessment(
         "verdict": verdict,
         "explanation": f"Explains {claim_id}.",
         "diff_citations": diff_citations if diff_citations is not None else [],
+        "code_citations": [],
         "check_citations": [{"name": name} for name in check_citations or []],
         "missing_tests": [],
         "edge_cases": [],
@@ -127,14 +128,14 @@ async def test_a_verdict_whose_citations_all_fail_is_downgraded_to_insufficient_
     assert downgraded.dropped_citations == 3
     assert downgraded.notes == [
         "The model judged this claim contradicted without a citation that checks out against the "
-        "diff or the CI checks, so it's marked as insufficient evidence.",
-        "3 citations were left out because they don't point to lines shown in the diff or to a "
-        "CI check.",
+        "evidence, so it's marked as insufficient evidence.",
+        "3 citations were left out because they don't point to lines shown in the evidence or to "
+        "a CI check.",
     ]
     assert result.verdicts[1].status == "supported"
     assert result.dropped_citations == 3
     assert result.notes == [
-        "3 citations in all were left out because they didn't match the diff or a CI check."
+        "3 citations in all were left out because they didn't match the evidence or a CI check."
     ]
 
 
@@ -164,8 +165,8 @@ async def test_one_bad_citation_is_dropped_and_the_verdict_stands_on_the_rest() 
     assert kept.citations == [DiffCitation(path="src/upload.py", start_line=1, end_line=1)]
     assert kept.dropped_citations == 1
     assert kept.notes == [
-        "1 citation was left out because it doesn't point to lines shown in the diff or to a CI "
-        "check."
+        "1 citation was left out because it doesn't point to lines shown in the evidence or to a "
+        "CI check."
     ]
     assert result.verdicts[1].status == "insufficient_evidence"
     assert result.verdicts[1].notes == []
@@ -408,7 +409,7 @@ async def test_logs_count_what_was_dropped_but_never_the_text(
     with caplog.at_level(logging.INFO):
         await claim_assessor.assess(snapshot(), CLAIMS)
 
-    record = caplog.records[0]
+    [record] = [r for r in caplog.records if hasattr(r, "dropped_citations")]
     assert (record.dropped_citations, record.ignored, record.skipped) == (1, 1, 1)  # type: ignore[attr-defined]
     assert "Secret-looking" not in caplog.text
     assert "Retries" not in caplog.text

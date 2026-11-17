@@ -33,6 +33,7 @@ def assessment(claim_id: str, **overrides: Any) -> dict[str, Any]:
         "verdict": "supported",
         "explanation": "The diff adds the check.",
         "diff_citations": [{"path": "src/refunds.py", "start_line": 1, "end_line": 1}],
+        "code_citations": [],
         "check_citations": [{"name": "test"}],
         "missing_tests": ["A refund repeated after a timeout."],
         "edge_cases": [],

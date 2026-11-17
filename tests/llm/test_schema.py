@@ -2,6 +2,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
 from pr_evidence_reviewer.domain.claims import ExtractionOutput
+from pr_evidence_reviewer.domain.verdicts import MAX_LINE_NUMBER, AssessmentOutput
 from pr_evidence_reviewer.llm.schema import strict_json_schema
 
 
@@ -80,3 +81,47 @@ class Mapping(BaseModel):
 def test_open_ended_objects_are_refused() -> None:
     with pytest.raises(ValueError, match="additionalProperties"):
         strict_json_schema(Mapping.model_json_schema())
+
+
+# The assessment reply, as each provider receives it: Claude Code and Gemini get the model's own
+# schema, Codex gets the strict copy. All three must be the same, strict-compatible schema.
+REFUSED_BY_STRICT_MODE = frozenset({"default", "maxLength", "minLength"})
+
+
+def _keywords(node: object) -> set[str]:
+    if isinstance(node, list):
+        return set().union(*(_keywords(item) for item in node)) if node else set()
+    if not isinstance(node, dict):
+        return set()
+    found: set[str] = set()
+    for key, value in node.items():
+        if key in {"properties", "$defs"} and isinstance(value, dict):
+            found |= set().union(*(_keywords(sub) for sub in value.values())) if value else set()
+        else:
+            found.add(key)
+            found |= _keywords(value)
+    return found
+
+
+def test_the_assessment_schema_is_the_same_for_every_provider() -> None:
+    schema = AssessmentOutput.model_json_schema()
+
+    assert strict_json_schema(schema) == schema
+    assert not _keywords(schema) & REFUSED_BY_STRICT_MODE
+
+
+def test_the_assessment_schema_requires_code_citations_with_bounded_lines() -> None:
+    schema = strict_json_schema(AssessmentOutput.model_json_schema())
+    assessment = schema["$defs"]["ProposedAssessment"]
+    code = schema["$defs"]["ProposedCodeCitation"]
+    diff = schema["$defs"]["ProposedDiffCitation"]
+
+    assert "code_citations" in assessment["required"]
+    assert code["required"] == ["path", "start_line", "end_line", "commit", "quote"]
+    assert code["additionalProperties"] is False
+    for field in ("start_line", "end_line"):
+        assert (code["properties"][field]["minimum"], code["properties"][field]["maximum"]) == (
+            1,
+            MAX_LINE_NUMBER,
+        )
+        assert diff["properties"][field]["maximum"] == MAX_LINE_NUMBER

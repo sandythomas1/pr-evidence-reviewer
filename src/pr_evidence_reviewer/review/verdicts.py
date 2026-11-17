@@ -77,6 +77,8 @@ conflicts with it; insufficient_evidence otherwise.
 - diff_citations: the lines your verdict rests on. path is a file path exactly as written after \
 === in the diff. start_line and end_line are the head-side line numbers shown on the left. Removed \
 lines have no number and can't be cited.
+- code_citations: leave this empty. This evidence shows only the diff, so cite changed lines in \
+diff_citations.
 - check_citations: CI checks by their exact name, when a check result is part of your reasoning.
 - missing_tests: tests that would check this claim but aren't in the diff. Empty when there are none.
 - edge_cases: inputs or situations a reviewer should check by hand. Empty when there are none.
@@ -210,6 +212,10 @@ def check_assessments(
         if assessment.claim_id in known:
             by_id.setdefault(assessment.claim_id, assessment)
     verdicts = [_verdict(claim.id, by_id.get(claim.id), checker) for claim in claims]
+    drop_reasons = checker.drop_reasons()
+    if drop_reasons:
+        # Counts only: paths, quotes and line text come from the model or the repository.
+        logger.info("Dropped citations by reason", extra={"drop_reasons": drop_reasons})
     return verdicts, len(proposed) - len(by_id)
 
 
@@ -233,6 +239,12 @@ def _verdict(
             dropped += 1
         elif checked not in citations:
             citations.append(checked)
+    for code_citation in proposed.code_citations:
+        checked_code = checker.check_code(code_citation)
+        if checked_code is None:
+            dropped += 1
+        elif checked_code not in citations:
+            citations.append(checked_code)
     for check_citation in proposed.check_citations:
         matches = checker.check_ci(check_citation)
         if not matches:
@@ -244,7 +256,7 @@ def _verdict(
     if status != "insufficient_evidence" and not citations:
         notes.append(
             f"The model judged this claim {status} without a citation that checks out against "
-            "the diff or the CI checks, so it's marked as insufficient evidence."
+            "the evidence, so it's marked as insufficient evidence."
         )
         status = "insufficient_evidence"
     elif status != "insufficient_evidence" and not any(_decides(c, status) for c in citations):
@@ -266,7 +278,7 @@ def _verdict(
 
 
 def _decides(citation: Citation, status: ClaimStatus) -> bool:
-    """Whether this citation alone can back the verdict. Diff lines always can."""
+    """Whether this citation alone can back the verdict. Diff and code lines always can."""
     if isinstance(citation, CheckCitation):
         return check_outcome(citation) == _DECIDING_OUTCOME.get(status)
     return True
@@ -295,12 +307,12 @@ def _non_empty(items: list[str]) -> list[str]:
 def _dropped_note(dropped: int) -> str:
     if dropped == 1:
         return (
-            "1 citation was left out because it doesn't point to lines shown in the diff or to a "
-            "CI check."
+            "1 citation was left out because it doesn't point to lines shown in the evidence or to "
+            "a CI check."
         )
     return (
-        f"{dropped} citations were left out because they don't point to lines shown in the diff "
-        "or to a CI check."
+        f"{dropped} citations were left out because they don't point to lines shown in the "
+        "evidence or to a CI check."
     )
 
 
@@ -314,12 +326,12 @@ def _notes(dropped: int, ignored: int, skipped: int) -> list[str]:
         )
     if dropped == 1:
         notes.append(
-            "1 citation in all was left out because it didn't match the diff or a CI check."
+            "1 citation in all was left out because it didn't match the evidence or a CI check."
         )
     elif dropped:
         notes.append(
-            f"{dropped} citations in all were left out because they didn't match the diff or a CI "
-            "check."
+            f"{dropped} citations in all were left out because they didn't match the evidence or a "
+            "CI check."
         )
     if ignored == 1:
         notes.append(

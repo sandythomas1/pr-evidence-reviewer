@@ -1,4 +1,10 @@
-import type { ClaimSet, ProviderStatus, PullRequestSnapshot, VerdictSet } from "../types";
+import type {
+  ClaimSet,
+  CodeCitation,
+  ProviderStatus,
+  PullRequestSnapshot,
+  VerdictSet,
+} from "../types";
 
 export const HEAD_SHA = "a".repeat(40);
 export const BASE_SHA = "b".repeat(40);
@@ -125,15 +131,27 @@ export function makeVerdictSet(overrides: Partial<VerdictSet> = {}): VerdictSet 
         edge_cases: [],
         dropped_citations: 1,
         notes: [
-          "1 citation was left out because it doesn't point to lines shown in the diff or to a CI check.",
+          "1 citation was left out because it doesn't point to lines shown in the evidence or to a CI check.",
         ],
       },
     ],
     dropped_citations: 1,
-    notes: ["1 citation in all was left out because it didn't match the diff or a CI check."],
+    notes: ["1 citation in all was left out because it didn't match the evidence or a CI check."],
     scope_limitations: [],
     provider: "claude_code",
     model: "claude-opus-5-5",
+    packet_hash: null,
+    ...overrides,
+  };
+}
+
+export function makeCodeCitation(overrides: Partial<CodeCitation> = {}): CodeCitation {
+  return {
+    kind: "code",
+    path: "src/retry.py",
+    start_line: 3,
+    end_line: 8,
+    commit: HEAD_SHA,
     ...overrides,
   };
 }

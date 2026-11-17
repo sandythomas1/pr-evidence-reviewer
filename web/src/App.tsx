@@ -50,7 +50,8 @@ function announcement(state: State): string {
       if (state.claims.kind === "error") return `Loaded ${name}. Its claims couldn't be found.`;
       const count = state.claims.claims.claims.length;
       const found = `Loaded ${name}. Found ${String(count)} ${count === 1 ? "claim" : "claims"}.`;
-      if (state.verdicts.kind === "loading") return `${found} Checking them against the diff…`;
+      if (state.verdicts.kind === "loading")
+        return `${found} Checking them against the code and the CI checks…`;
       if (state.verdicts.kind === "error") return `${found} They couldn't be checked.`;
       if (state.verdicts.kind === "loaded")
         return `${found} ${verdictSummary(state.verdicts.verdicts)}`;

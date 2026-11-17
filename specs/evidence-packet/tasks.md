@@ -119,24 +119,24 @@
 - [x] 24. Confirm #13/#14/#15 green (ruff, black, mypy, pytest) before each issue's commit. (dep: 18, 20, 22, 23) @qa · #13–#15
 
 ## B3 — Citation validator (#17)
-- [ ] 25. Domain: `ProposedCodeCitation` (all fields required, `ge=1, le=10**7` on lines, `quote` max length) in
+- [x] 25. Domain: `ProposedCodeCitation` (all fields required, `ge=1, le=10**7` on lines, `quote` max length) in
   `ProposedAssessment.code_citations`; `CodeCitation{kind:"code"}` in the `Citation` union; `VerdictSet.packet_hash`;
   regenerate and assert the strict schema per provider. Files: `domain/verdicts.py`, `tests/llm/test_schema.py`.
   (dep: 1) @implementer · #17 AC8 · T7 · plan: D6 Domain
-- [ ] 26. `review/citations.py`: `ShownLines` protocol; `check_code` on the protocol (`SnapshotCitationChecker` → None);
+- [x] 26. `review/citations.py`: `ShownLines` protocol; `check_code` on the protocol (`SnapshotCitationChecker` → None);
   `CheckoutCitationChecker(reader, head_sha, shown)` with the five ordered rules and C4 semantics (head or ≥ 7-hex
   head prefix only; `text` kind only; `split_lines` range; shown; `Zs`-collapsing quote, < 8 chars unquoted);
   `check_diff` also requires lines to exist at head with a reader; `check_assessments` code loop, downgrade, drop
   counts by reason in logs (no paths/quotes). (dep: 9, 25) @implementer · #17 AC8 · T4, T7 · plan: D6 Checker
-- [ ] 27. @qa T7 property suite (hypothesis): generated files mixing `\r\n`, `\r`, U+2028, U+0085, `\v`, `\f`, with and
+- [x] 27. @qa T7 property suite (hypothesis): generated files mixing `\r\n`, `\r`, U+2028, U+0085, `\v`, `\f`, with and
   without final newline → line N as rendered by `split_lines` equals N validated; ranges 0, 1, n, n+1, start>end,
   10**18 (schema rejects); 6-hex, 7-hex, uppercase, 40-hex base SHAs; NBSP, zero-width insert, adjacent-line, empty
   and 7-char quotes; an undecodable and a binary file are not citable; `shown=None` path; sole citation dropped →
   `insufficient_evidence`. (dep: 26) @qa · #17 AC8 · T7, C4 · plan: D6, D2 Text
-- [ ] 28. UI: `CodeCitation` in `web/src/types.ts`, rendered via `DiffCitationItem` as "unchanged code" in
+- [x] 28. UI: `CodeCitation` in `web/src/types.ts`, rendered via `DiffCitationItem` as "unchanged code" in
   `VerdictView.tsx`; keep dropped counts; copy update (repo search/tests/symbols; first review can take minutes);
   Vitest cases + fixture. (dep: 25) [P with 26] @implementer · #17 AC8 · plan: D6 UI
-- [ ] 29. Confirm #17 green (Python + `npm run lint/format:check/test/build`) before its commit. (dep: 27, 28) @qa · #17
+- [x] 29. Confirm #17 green (Python + `npm run lint/format:check/test/build`) before its commit. (dep: 27, 28) @qa · #17
 
 ## B4 — Evidence packet and wiring (#16)
 - [ ] 30. `domain/evidence.py`: frozen, `extra="forbid"` packet models per plan schema (incl. `evidence_incomplete`),

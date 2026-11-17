@@ -90,3 +90,15 @@ token, path traversal, ReDoS), domain (evidence-gap semantics, verdict downgrade
 - B2 implementer (#13–#15, tasks 16–24), fresh dispatch because B1's context is large: *Builds search, test mapping
   and tree-sitter symbols on the B1 reader; ReDoS/size-cap surfaces T5/T6/T8.* Pending.
 - B2 stopped at maxTurns (60) with no report, so the result is PARTIAL (L0). Continued with SendMessage. Pending.
+- B2 DONE. Trees: #13 **baaf5907c715d1a26eda18b18f29507b8103b048**, #14 **3dd4b284c5bc172761813cf3d35a15ec7966d19f**,
+  #15 **ba06e77ca9f8c4f880713a05e2928de0e027a3b7**. The Lead re-ran: 753 passed, 3 skipped. ruff and mypy are clean,
+  and the tree hash matches. The #13 tree includes the `.hypothesis/` .gitignore line.
+- L1, for Key decisions: on Windows with py3.12, tree-sitter 0.26.0 corrupts memory when `Point.row` is read by
+  attribute. Unpacking the point is safe. symbols.py unpacks only, and an AST test forbids `.row`/`.column`. Re-check
+  on any tree-sitter bump. The B3/B4 briefs carry this.
+- Other B2 notes: `CheckoutReader.skipped()` added; `find_definitions` is one pass over many names (C3);
+  `is_low_value` widened, with PR-changed paths exempt.
+- B3 implementer (#17, tasks 25–29), fresh dispatch: *Builds the citation validator that enforces "no valid citation
+  → insufficient evidence" against the checkout (T7, C4), plus the dropped-citation UI count.* Pending.
+- B3 stopped at maxTurns (60) with no report, so the result is PARTIAL (L0). Continued with SendMessage. Pending.
+  Third batch in a row to hit 60 turns, so the batches are sized too large for the turn cap. Lesson candidate.

@@ -33,7 +33,7 @@ def test_a_range_inside_one_hunk_checks_out(start: int, end: int) -> None:
         ("src/upload.py", 0, 1),
         ("src/upload.py", -3, 2),
         ("src/upload.py", 3, 2),  # backwards
-        ("src/upload.py", 1, 10**9),  # absurdly long, rejected without walking the range
+        ("src/upload.py", 1, 10**7),  # absurdly long, rejected without walking the range
         ("src/Upload.py", 1, 1),  # paths are case-sensitive
         ("./src/upload.py", 1, 1),
         ("/src/upload.py", 1, 1),

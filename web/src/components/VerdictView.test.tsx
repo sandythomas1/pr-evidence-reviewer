@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { HEAD_SHA, makeVerdictSet } from "../test/fixtures";
+import { HEAD_SHA, makeCodeCitation, makeVerdictSet } from "../test/fixtures";
 import type { ClaimVerdict, DiffCitation } from "../types";
 import { ClaimVerdictView, StatusBadge, citationUrl } from "./VerdictView";
 
@@ -76,6 +76,37 @@ describe("ClaimVerdictView", () => {
     expect(screen.getByRole("heading", { name: "Missing tests" })).toBeInTheDocument();
     expect(screen.getByText("A test where every attempt fails.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Edge cases to check" })).toBeInTheDocument();
+  });
+
+  it("shows code the pull request didn't change as unchanged code, linked at the commit", () => {
+    const verdict = firstVerdict({ citations: [makeCodeCitation()] });
+    render(<ClaimVerdictView verdict={verdict} repo={REPO} headSha={HEAD_SHA} />);
+
+    const link = screen.getByRole("link", { name: /src\/retry\.py, lines 3–8 \(unchanged code\)/ });
+    expect(link).toHaveAttribute(
+      "href",
+      `https://github.com/octo-org/widgets/blob/${HEAD_SHA}/src/retry.py#L3-L8`,
+    );
+    expect(link).toHaveAccessibleName(/opens GitHub in a new tab/);
+  });
+
+  it("names a single cited line of unchanged code", () => {
+    const verdict = firstVerdict({ citations: [makeCodeCitation({ start_line: 5, end_line: 5 })] });
+    render(<ClaimVerdictView verdict={verdict} repo={REPO} headSha={HEAD_SHA} />);
+
+    expect(
+      screen.getByRole("link", { name: /src\/retry\.py, line 5 \(unchanged code\)/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows unchanged code without a link when the commit id isn't valid", () => {
+    const verdict = firstVerdict({ citations: [makeCodeCitation()] });
+    render(<ClaimVerdictView verdict={verdict} repo={REPO} headSha="not-a-sha" />);
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText(/unchanged code/)).toHaveTextContent(
+      "src/retry.py, lines 3–8 (unchanged code)",
+    );
   });
 
   it("names a single cited line", () => {
