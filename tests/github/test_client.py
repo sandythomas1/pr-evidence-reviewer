@@ -178,3 +178,22 @@ async def test_errors_never_contain_the_token() -> None:
         await client_for(fake).fetch_snapshot(REF)
 
     assert TOKEN not in str(error.value)
+
+
+async def test_records_the_fork_the_head_commit_lives_in() -> None:
+    fake = FakeGitHub()
+    fake.pull["head"]["repo"] = {"full_name": "contributor/shop-fork"}
+
+    snapshot = await client_for(fake).fetch_snapshot(REF)
+
+    assert snapshot.head_repo == "contributor/shop-fork"
+
+
+@pytest.mark.parametrize("repo", [None, {}, {"full_name": "../evil"}, {"full_name": 7}])
+async def test_a_missing_or_malformed_fork_is_left_out(repo: object) -> None:
+    fake = FakeGitHub()
+    fake.pull["head"]["repo"] = repo
+
+    snapshot = await client_for(fake).fetch_snapshot(REF)
+
+    assert snapshot.head_repo is None

@@ -41,6 +41,24 @@ class GitHubUnavailableError(ReviewerError):
     http_status = 502
 
 
+class CheckoutUnavailableError(ReviewerError):
+    """The repository at the head commit couldn't be read. A review degrades to the diff and CI.
+
+    Raised with fixed messages and `from None`: a download URL can carry a short-lived token, so no
+    transport error, URL or response text is ever chained or quoted (threat T3).
+    """
+
+    code = "checkout_unavailable"
+    http_status = 502
+
+
+class RepositoryTooLargeError(ReviewerError):
+    """The repository at the head commit is over a size limit, so it isn't read in full."""
+
+    code = "repository_too_large"
+    http_status = 413
+
+
 class ClaimsOutOfDateError(ReviewerError):
     """The claims sent for checking no longer match the pull request's current text."""
 

@@ -1,5 +1,7 @@
 """FastAPI application factory."""
 
+import logging
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
@@ -33,12 +35,23 @@ def _health_router() -> APIRouter:
     return router
 
 
+QUIET_HTTP_LOGGERS = ("httpx", "httpcore")
+
+
+def quiet_http_loggers() -> None:
+    """httpx logs every request URL at INFO, and a repository download URL carries a short-lived
+    token (threat T3). Keep the HTTP client loggers at WARNING whatever the root level is."""
+    for name in QUIET_HTTP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def create_app(
     settings: Settings | None = None,
     snapshot_source: snapshots.SnapshotSource | None = None,
     providers: list[LLMProvider] | None = None,
 ) -> FastAPI:
     """Build the app. Tests pass their own settings and dependencies."""
+    quiet_http_loggers()
     settings = settings or Settings()
     app = FastAPI(title="PR Evidence Reviewer", version=__version__)
     app.state.settings = settings

@@ -13,6 +13,7 @@ from pr_evidence_reviewer.domain.pull_request import (
     CommitRef,
     PullRequestRef,
     PullRequestSnapshot,
+    split_repo_full_name,
 )
 from pr_evidence_reviewer.errors import (
     GitHubAuthError,
@@ -30,6 +31,19 @@ DEFAULT_TIMEOUT_SECONDS = 20.0
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 JsonObject = dict[str, Any]
+
+
+USER_AGENT = f"pr-evidence-reviewer/{__version__}"
+
+
+def api_headers(token: str) -> dict[str, str]:
+    """Headers for api.github.com. Only ever sent to API_BASE_URL."""
+    return {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": USER_AGENT,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
 
 
 class _OptionalEvidenceError(Exception):
@@ -81,6 +95,7 @@ class GitHubClient:
             html_url=pull["html_url"],
             base=CommitRef(ref=pull["base"]["ref"], sha=_validated_sha(pull["base"]["sha"])),
             head=CommitRef(ref=pull["head"]["ref"], sha=head_sha),
+            head_repo=_head_repo(pull["head"]),
             changed_files_count=int(pull.get("changed_files", len(changed_files))),
             files=changed_files,
             checks=check_results,
@@ -93,12 +108,7 @@ class GitHubClient:
             transport=self._transport,
             timeout=self._timeout,
             follow_redirects=False,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {token}",
-                "User-Agent": f"pr-evidence-reviewer/{__version__}",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers=api_headers(token),
         )
 
     @staticmethod
@@ -233,6 +243,13 @@ def _validated_sha(value: object) -> str:
     if not isinstance(value, str) or not _SHA.match(value):
         raise GitHubUnavailableError("GitHub returned a commit id in an unexpected format.")
     return value
+
+
+def _head_repo(head: JsonObject) -> str | None:
+    """The fork's `owner/repo`, validated like a PR link; None if absent (e.g. a deleted fork)."""
+    repo = head.get("repo")
+    name = split_repo_full_name(repo.get("full_name") if isinstance(repo, dict) else None)
+    return None if name is None else f"{name[0]}/{name[1]}"
 
 
 def _changed_file(item: JsonObject) -> ChangedFile:
