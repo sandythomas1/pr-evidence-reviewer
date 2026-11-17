@@ -101,15 +101,6 @@ def test_a_patch_without_a_hunk_header_is_a_gap() -> None:
     assert packet.index.head_lines == {}
 
 
-def test_the_no_newline_marker_is_not_a_line() -> None:
-    patch = "@@ -1 +1 @@\n-old\n+new\n\\ No newline at end of file"
-
-    packet = build_evidence(snapshot(files=[changed_file("a.txt", patch=patch)]))
-
-    assert packet.index.head_lines == {"a.txt": frozenset({1})}
-    assert "No newline" not in packet.text
-
-
 def test_a_removed_file_has_no_lines_to_cite() -> None:
     patch = "@@ -1,2 +0,0 @@\n-gone\n-also gone"
 
@@ -191,20 +182,7 @@ def test_every_file_gets_its_first_hunk_before_any_file_gets_a_second() -> None:
     assert packet.evidence_incomplete
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "package-lock.json",
-        "web/pnpm-lock.yaml",
-        "yarn.lock",
-        "uv.lock",
-        "go.sum",
-        "static/app.min.js",
-        "dist/bundle.js",
-        "vendor/lib/x.go",
-        "web/node_modules/left-pad/index.js",
-    ],
-)
+@pytest.mark.parametrize("path", ["package-lock.json", "dist/bundle.js", "build/out.js"])
 def test_lockfiles_and_generated_files_are_checked_last(path: str) -> None:
     files = [changed_file(path, patch=_hunks(1, 5)), changed_file("src/z.py", patch=_hunks(1, 5))]
 
@@ -214,23 +192,6 @@ def test_lockfiles_and_generated_files_are_checked_last(path: str) -> None:
     assert packet.scope_limitations == [
         f"The diff is too long to check in full. Not checked: {path}."
     ]
-
-
-def test_a_trailing_newline_in_a_patch_is_not_a_line() -> None:
-    patch = "@@ -1,1 +1,2 @@\n context\n+added\n"
-
-    packet = build_evidence(snapshot(files=[changed_file("a.py", patch=patch)]))
-
-    assert packet.index.head_lines == {"a.py": frozenset({1, 2})}
-    assert "      3" not in packet.text
-
-
-def test_an_empty_context_line_inside_the_hunk_counts_until_the_header_is_used_up() -> None:
-    patch = "@@ -1,3 +1,3 @@\n one\n\n three\n\n"
-
-    packet = build_evidence(snapshot(files=[changed_file("a.py", patch=patch)]))
-
-    assert packet.index.head_lines == {"a.py": frozenset({1, 2, 3})}
 
 
 def test_only_so_many_ci_checks_are_shown_and_the_rest_are_named_as_a_gap() -> None:
@@ -246,16 +207,7 @@ def test_only_so_many_ci_checks_are_shown_and_the_rest_are_named_as_a_gap() -> N
     assert packet.evidence_incomplete
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        ".github/workflows/ci.yml",
-        ".gitlab-ci.yml",
-        ".circleci/config.yml",
-        "azure-pipelines.yml",
-        "build/Jenkinsfile",
-    ],
-)
+@pytest.mark.parametrize("path", [".github/workflows/ci.yml", "build/Jenkinsfile"])
 def test_a_change_to_the_ci_setup_is_a_scope_limitation(path: str) -> None:
     files = [changed_file("src/upload.py"), changed_file(path)]
 
@@ -267,9 +219,3 @@ def test_a_change_to_the_ci_setup_is_a_scope_limitation(path: str) -> None:
         "evidence."
     ]
     assert not packet.evidence_incomplete
-
-
-def test_an_unrelated_yaml_file_is_not_ci_setup() -> None:
-    packet = build_evidence(snapshot(files=[changed_file("config/app.yml")]))
-
-    assert not packet.changes_ci_config

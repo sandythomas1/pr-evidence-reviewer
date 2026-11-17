@@ -79,3 +79,13 @@ token, path traversal, ReDoS), domain (evidence-gap semantics, verdict downgrade
   Security-sensitive, so frontier tier (Opus, as pinned).* Pending.
 - B1 stopped at the 60-turn maxTurns limit with no report, so the result is PARTIAL (L0). Continued with SendMessage,
   not respawned. Pending.
+- B1 DONE (#12). Tree **e47d2d9e6516d8ebd789fc8df304ff98ed04b9a4**. The Lead re-ran the suite: 589 passed, 3 skipped
+  (POSIX-only / admin symlink). The tree hash matches. ruff, black, mypy and the lock are clean.
+- Deviations (L0, plan wins): tree-entry cap 100k (task 14 said 200k); path ≤ 1024 B and ≤ 255 B per segment (the
+  threat model said 4096).
+- Task 3 CI matrix is [~]: actionlint was blocked by the permission classifier, and the Lead will not run it either. The
+  first PR CI run validates it. Task 15 (junction) passes locally on Windows through `_winapi.CreateJunction`.
+- Carry-forward to B4: task 35 must construct CheckoutCache inside lifespan (its asyncio locks).
+- Lead L0: added `.hypothesis/` to .gitignore. It lands in the #13 tree.
+- B2 implementer (#13–#15, tasks 16–24), fresh dispatch because B1's context is large: *Builds search, test mapping
+  and tree-sitter symbols on the B1 reader; ReDoS/size-cap surfaces T5/T6/T8.* Pending.

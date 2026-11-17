@@ -13,33 +13,21 @@ The full evidence packet (#16) replaces this with checkout search, test mapping,
 """
 
 import json
-import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from pr_evidence_reviewer.domain.pull_request import ChangedFile, CheckResult, PullRequestSnapshot
+from pr_evidence_reviewer.evidence.diff import (
+    CI_CONFIG_LIMITATION,
+    Hunk,
+    is_low_value,
+    parse_hunks,
+    touches_ci_config,
+)
 
 MAX_DIFF_CHARS = 60_000
 MAX_CHECK_LINES = 200
 MAX_NAMED_FILES = 20
-_HUNK_HEADER = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
-_GUTTER = 7
-
-# Files that rarely carry the change a claim is about. They get the diff budget last.
-_LOW_VALUE_NAMES = frozenset(
-    {"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "go.sum", "composer.lock"}
-)
-_LOW_VALUE_SUFFIXES = (".lock", ".min.js", ".min.css", ".map")
-_LOW_VALUE_DIRS = frozenset({"dist", "vendor", "node_modules"})
-
-# A pull request that edits these can change what its own CI checks test.
-_CI_CONFIG_PREFIXES = (".github/workflows/", ".circleci/")
-_CI_CONFIG_NAMES = frozenset(
-    {".gitlab-ci.yml", "azure-pipelines.yml", "azure-pipelines.yaml", "Jenkinsfile"}
-)
-CI_CONFIG_LIMITATION = (
-    "This pull request changes its own CI setup, so its CI checks may not be independent evidence."
-)
 
 
 @dataclass(frozen=True)
@@ -62,20 +50,14 @@ class EvidencePacket:
     changes_ci_config: bool = False
 
 
-@dataclass(frozen=True)
-class _Hunk:
-    text: str
-    head_lines: frozenset[int]
-
-
 @dataclass
 class _FileDiff:
     file: ChangedFile
     header: str
-    hunks: list[_Hunk]
+    hunks: list[Hunk]
     kept: list[bool]
 
-    def kept_hunks(self) -> list[_Hunk]:
+    def kept_hunks(self) -> list[Hunk]:
         return [hunk for hunk, kept in zip(self.hunks, self.kept, strict=True) if kept]
 
 
@@ -95,7 +77,7 @@ def build_evidence(
             if file.additions or file.deletions:
                 gaps.append(f"No diff is available for {_inline(file.path)} (binary or too large).")
             continue
-        hunks = _parse_hunks(file.patch)
+        hunks = parse_hunks(file.patch)
         if not hunks:
             gaps.append(f"The diff for {_inline(file.path)} couldn't be read.")
             continue
@@ -112,7 +94,7 @@ def build_evidence(
             f"Not checked: {len(all_checks) - len(checks)} checks."
         )
     evidence_incomplete = bool(limitations)
-    changes_ci_config = any(_touches_ci_config(file) for file in snapshot.files)
+    changes_ci_config = any(touches_ci_config(file) for file in snapshot.files)
     if changes_ci_config:
         limitations.append(CI_CONFIG_LIMITATION)
     if not all_checks:
@@ -175,76 +157,12 @@ def _share_budget(diffs: list[_FileDiff], max_chars: int) -> None:
             used += cost
 
 
-def is_low_value(path: str) -> bool:
-    """Lockfiles and generated, minified, or vendored files: rarely where a claimed change is."""
-    *folders, name = path.split("/")
-    return (
-        name in _LOW_VALUE_NAMES
-        or name.endswith(_LOW_VALUE_SUFFIXES)
-        or any(folder in _LOW_VALUE_DIRS for folder in folders)
-    )
-
-
-def _touches_ci_config(file: ChangedFile) -> bool:
-    return any(
-        path.startswith(_CI_CONFIG_PREFIXES) or path.rsplit("/", 1)[-1] in _CI_CONFIG_NAMES
-        for path in (file.path, file.previous_path)
-        if path
-    )
-
-
 def _file_header(file: ChangedFile) -> str:
     renamed = f" from {_inline(file.previous_path)}" if file.previous_path else ""
     return (
         f"=== {_inline(file.path)} ({file.status}{renamed}, "
         f"+{file.additions} -{file.deletions}) ==="
     )
-
-
-def _parse_hunks(patch: str) -> list[_Hunk]:
-    """Split a unified diff into hunks. Lines before the first hunk header are skipped."""
-    hunks: list[_Hunk] = []
-    header: re.Match[str] | None = None
-    body: list[str] = []
-    for line in patch.split("\n"):
-        match = _HUNK_HEADER.match(line)
-        if match is None:
-            body.append(line)
-            continue
-        if header is not None:
-            hunks.append(_render_hunk(header, body))
-        header, body = match, []
-    if header is not None:
-        hunks.append(_render_hunk(header, body))
-    return hunks
-
-
-def _render_hunk(header: re.Match[str], body: list[str]) -> _Hunk:
-    """Number every line that exists on the head side: context and added lines.
-
-    The header's line counts say how long the hunk is, so anything past them, such as the empty
-    string a trailing newline leaves, is not a line.
-    """
-    old_left = int(header.group(1) or 1)
-    next_line = int(header.group(2))
-    new_left = int(header.group(3) or 1)
-    lines = [f"@@ +{next_line} @@{header.group(4)}"]
-    numbers: set[int] = set()
-    for raw in body:
-        if old_left <= 0 and new_left <= 0:
-            break
-        marker, content = (raw[0], raw[1:]) if raw else (" ", "")
-        if marker == "-":
-            lines.append(f"{'':>{_GUTTER}} - {content}")
-            old_left -= 1
-        elif marker in " +" and new_left > 0:
-            lines.append(f"{next_line:>{_GUTTER}} {marker} {content}")
-            numbers.add(next_line)
-            next_line += 1
-            new_left -= 1
-            if marker == " ":
-                old_left -= 1
-    return _Hunk(text="\n".join(lines), head_lines=frozenset(numbers))
 
 
 def _check_line(check: CheckResult) -> str:

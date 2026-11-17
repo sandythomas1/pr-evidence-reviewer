@@ -82,17 +82,17 @@
   second review of the same SHA makes 0 downloads. (dep: 8, 10) @qa · #12 AC1, AC3 · T9, T11 · plan: D2
 
 ## B2 — Search, test mapping, symbols (#13, #14, #15)
-- [ ] 16. Create `evidence/diff.py` by moving hunk parsing, `is_low_value` and CI-config detection unchanged out of
+- [x] 16. Create `evidence/diff.py` by moving hunk parsing, `is_low_value` and CI-config detection unchanged out of
   `review/evidence.py` (which imports them until #16); extend `is_low_value` with `build/`, `third_party/`,
   `__generated__/`, `*.pb.go`, `*_pb2.py`, `*.generated.*`, `*.min.*`; move their tests to `tests/evidence/test_diff.py`.
   Done: 372 tests green. (dep: 1) @implementer · #13 AC4 · plan: D7, D3 Corpus
-- [ ] 17. `evidence/search.py`: corpus selection (text, ≤ 1 MiB, no NUL in 8 KiB, not LFS/undecodable, low-value skipped
+- [x] 17. `evidence/search.py`: corpus selection (text, ≤ 1 MiB, no NUL in 8 KiB, not LFS/undecodable, low-value skipped
   **unless PR-changed**; changed first then path; 256 MiB cap → scope limitation); literal search as **one pass over
   the corpus for all queries** (dedupe ≤ 64, whole-file precheck, `split_lines`, lines > 2 000 chars skipped before
   matching, identifier boundary); regex mode (`regex`, `concurrent=True`, `timeout=` remaining deadline, ≤ 256 chars,
   repeat > 1000 rejected, 2 s/query, 20 s/phase, `search_timeout` gap); result caps and ordering; skip records for
   changed/claim-relevant files. (dep: 9, 16) @implementer · #13 AC4 · T5, T8, C3, C5, C6, C8 · plan: D3
-- [ ] 18. @qa search suite: `(a+)+$`, `(a|aa)*b`, `(.*a){20}` on a 50 000-char line return within cap + 0.5 s with
+- [x] 18. @qa search suite: `(a+)+$`, `(a|aa)*b`, `(.*a){20}` on a 50 000-char line return within cap + 0.5 s with
   `search_timeout`, while an `asyncio` ticker run alongside `to_thread` never gaps > 250 ms (event-loop
   responsiveness); a literal on a 3 000-char line is never matched; a tracked file listed in `.gitignore` is found;
   a PR-changed file in `dist/` and `vendor/` is found, an unchanged one is not; caps hold in path order; same inputs
@@ -116,7 +116,7 @@
 - [ ] 23. @qa T6 symbols caps: a 5 MB minified JS file and a 600 KiB file with one 10 000-char line return `[]` from both
   `enclosing()` and `definitions()` quickly (< 1 s) with a skip reason; a node-cap fixture stops the walk.
   (dep: 21) @qa · #15 AC6 · T6, C9 · plan: D4
-- [ ] 24. Confirm #13/#14/#15 green (ruff, black, mypy, pytest) before each issue's commit. (dep: 18, 20, 22, 23) @qa · #13–#15
+- [~] 24. Confirm #13/#14/#15 green (ruff, black, mypy, pytest) before each issue's commit. (dep: 18, 20, 22, 23) @qa · #13–#15
 
 ## B3 — Citation validator (#17)
 - [ ] 25. Domain: `ProposedCodeCitation` (all fields required, `ge=1, le=10**7` on lines, `quote` max length) in

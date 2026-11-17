@@ -11,7 +11,7 @@ import threading
 from collections import OrderedDict
 from collections.abc import Iterable, Iterator
 
-from pr_evidence_reviewer.checkout.archive import ManifestFile, git_blob_sha
+from pr_evidence_reviewer.checkout.archive import ManifestFile, ManifestSkip, git_blob_sha
 from pr_evidence_reviewer.checkout.cache import Checkout
 from pr_evidence_reviewer.checkout.paths import RepoPath, normalize_repo_path
 from pr_evidence_reviewer.checkout.text import decode_strict, split_lines
@@ -50,6 +50,10 @@ class CheckoutReader:
     def files(self) -> tuple[ManifestFile, ...]:
         """Every stored file, sorted by path."""
         return self._manifest.files
+
+    def skipped(self) -> tuple[ManifestSkip, ...]:
+        """Tree entries the checkout doesn't hold, each with the reason (link, export-ignored, ...)."""
+        return self._manifest.skipped
 
     def file(self, path: str) -> ManifestFile | None:
         """The manifest entry for exactly `path`, or None. Raises `UnsafePathError` on refusal."""
