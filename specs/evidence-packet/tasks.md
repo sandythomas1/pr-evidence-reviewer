@@ -103,20 +103,20 @@
   checkout is unavailable. Nothing executed. (dep: 9, 16) [P with 17, 21] @implementer · #14 AC5 · plan: D5 schema (TestMapping), D8
 - [x] 20. @qa AC5 table test: one case per ecosystem (source → test file), a changed test, an untested file → gap, a
   README/config change → no gap, `subprocess.Popen` patched to raise. (dep: 19) @qa · #14 AC5 · plan: Testing Strategy
-- [ ] 21. `evidence/symbols.py` (only importer of tree-sitter): per-language node-type tables — Python
+- [x] 21. `evidence/symbols.py` (only importer of tree-sitter): per-language node-type tables — Python
   function/class (widened to `decorated_definition`); JS/TS function, generator, (abstract) class declarations,
   `method_definition`, variable declarators bound to arrow/function expressions, TS interface/type alias/enum; Go
   function, method, `type_spec`; Java/C# class, interface, enum, record, method, constructor (+ C# struct).
   `enclosing(path, line)` and `definitions(name)` (≤ 30 files containing the literal), both capped: ≤ 512 KiB, longest
   line ≤ 5 000, iterative cursor ≤ 200 000 nodes; over cap/unsupported/parse error → `[]` + skip reason. Lines via
   `split_lines`. (dep: 9) [P with 17, 19] @implementer · #15 AC6 · T6, C9 · plan: D4
-- [ ] 22. @qa AC6 symbols suite: py/js/ts/tsx/go/java/cs fixtures → hunk line maps to the innermost symbol with
+- [x] 22. @qa AC6 symbols suite: py/js/ts/tsx/go/java/cs fixtures → hunk line maps to the innermost symbol with
   qualified name and range; name → definitions; `.rb` → `[]` without error; a grammar-load smoke test (runs on all 3
   CI OSes). (dep: 21) @qa · #15 AC6 · plan: D4
-- [ ] 23. @qa T6 symbols caps: a 5 MB minified JS file and a 600 KiB file with one 10 000-char line return `[]` from both
+- [x] 23. @qa T6 symbols caps: a 5 MB minified JS file and a 600 KiB file with one 10 000-char line return `[]` from both
   `enclosing()` and `definitions()` quickly (< 1 s) with a skip reason; a node-cap fixture stops the walk.
   (dep: 21) @qa · #15 AC6 · T6, C9 · plan: D4
-- [~] 24. Confirm #13/#14/#15 green (ruff, black, mypy, pytest) before each issue's commit. (dep: 18, 20, 22, 23) @qa · #13–#15
+- [x] 24. Confirm #13/#14/#15 green (ruff, black, mypy, pytest) before each issue's commit. (dep: 18, 20, 22, 23) @qa · #13–#15
 
 ## B3 — Citation validator (#17)
 - [ ] 25. Domain: `ProposedCodeCitation` (all fields required, `ge=1, le=10**7` on lines, `quote` max length) in

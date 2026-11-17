@@ -89,3 +89,4 @@ token, path traversal, ReDoS), domain (evidence-gap semantics, verdict downgrade
 - Lead L0: added `.hypothesis/` to .gitignore. It lands in the #13 tree.
 - B2 implementer (#13–#15, tasks 16–24), fresh dispatch because B1's context is large: *Builds search, test mapping
   and tree-sitter symbols on the B1 reader; ReDoS/size-cap surfaces T5/T6/T8.* Pending.
+- B2 stopped at maxTurns (60) with no report, so the result is PARTIAL (L0). Continued with SendMessage. Pending.
