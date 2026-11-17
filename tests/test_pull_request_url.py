@@ -1,6 +1,10 @@
 import pytest
 
-from pr_evidence_reviewer.domain.pull_request import PullRequestRef, parse_pull_request_url
+from pr_evidence_reviewer.domain.pull_request import (
+    PullRequestRef,
+    parse_pull_request_url,
+    split_repo_full_name,
+)
 from pr_evidence_reviewer.errors import InvalidPullRequestUrlError
 
 
@@ -67,3 +71,21 @@ def test_rejects_anything_that_is_not_a_github_pull_request(url: str) -> None:
 
 def test_slug_is_human_readable() -> None:
     assert PullRequestRef(owner="acme", repo="shop", number=7).slug == "acme/shop#7"
+
+
+@pytest.mark.parametrize(
+    ("full_name", "expected"),
+    [
+        ("acme/shop", ("acme", "shop")),
+        ("Contributor/shop.js", ("Contributor", "shop.js")),
+        ("acme", None),
+        ("acme/..", None),
+        ("/shop", None),
+        ("acme/shop/extra", None),
+        ("ac me/shop", None),
+        (None, None),
+        (42, None),
+    ],
+)
+def test_splits_a_repository_full_name(full_name: object, expected: object) -> None:
+    assert split_repo_full_name(full_name) == expected

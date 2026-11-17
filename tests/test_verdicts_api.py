@@ -1,13 +1,26 @@
+import logging
+import re
+from collections.abc import Iterator
+from contextlib import ExitStack
+from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from pr_evidence_reviewer.api.app import create_app
-from pr_evidence_reviewer.errors import ProviderTimeoutError
+from pr_evidence_reviewer.checkout.cache import ArchiveSource
+from pr_evidence_reviewer.config import Settings
+from pr_evidence_reviewer.errors import CheckoutUnavailableError, ProviderTimeoutError
+from pr_evidence_reviewer.github.archive import GitHubArchiveSource
 from pr_evidence_reviewer.github.client import GitHubClient
+from pr_evidence_reviewer.review.verdicts import INCOMPLETE_NOTE
+from tests.checkout.fakes import FakeArchiveSource
+from tests.checkout.test_token_secrecy import LOCATION, SENTINELS, TOKEN_SENTINEL, leaky_failure
 from tests.client import local_client
 from tests.fakes import HEAD_SHA, TOKEN, FakeGitHub
+from tests.github.fake_archive import FakeGitHubArchive
 from tests.llm.fakes import FakeProvider
 
 PR_URL = "https://github.com/acme/shop/pull/7"
@@ -33,6 +46,7 @@ def assessment(claim_id: str, **overrides: Any) -> dict[str, Any]:
         "verdict": "supported",
         "explanation": "The diff adds the check.",
         "diff_citations": [{"path": "src/refunds.py", "start_line": 1, "end_line": 1}],
+        "code_citations": [],
         "check_citations": [{"name": "test"}],
         "missing_tests": ["A refund repeated after a timeout."],
         "edge_cases": [],
@@ -44,10 +58,46 @@ def assessment(claim_id: str, **overrides: Any) -> dict[str, Any]:
 REPLY = {"assessments": [assessment("c1"), assessment("c2", verdict="insufficient_evidence")]}
 
 
-def make_client(fake: FakeGitHub, *providers: Any) -> TestClient:
+# The repository at the head commit, as the fake archive source serves it.
+HEAD_FILES = {
+    "src/refunds.py": (
+        b"b = 1\n\n\ndef refund_once(order):\n    if order.refunded:\n        return order\n"
+        b"    return order.refund()\n"
+        # Lines no search result or definition shows, so a citation to them is dropped.
+        + b"".join(b"\n\nPAD_%d = %d\n" % (n, n) for n in range(10))
+    ),
+    "tests/test_refunds.py": b"def test_refund_once():\n    assert refund_once\n",
+}
+
+
+class _Apps:
+    """Where each test's app keeps its files, and the clients to close after the test."""
+
+    root = Path()
+    clients = ExitStack()
+
+
+@pytest.fixture(autouse=True)
+def _app_dirs(tmp_path: Path) -> Iterator[None]:
+    _Apps.root = tmp_path
+    with ExitStack() as clients:
+        _Apps.clients = clients
+        yield
+
+
+def make_client(
+    fake: FakeGitHub, *providers: Any, archive: ArchiveSource | None = None
+) -> TestClient:
+    """A started app (its lifespan builds the checkout cache) with hermetic directories."""
     github = GitHubClient(lambda: TOKEN, transport=fake.transport())
-    app = create_app(snapshot_source=github, providers=list(providers))
-    return local_client(app, raise_server_exceptions=False)
+    settings = Settings(cache_dir=_Apps.root / "cache", data_dir=_Apps.root / "data")
+    app = create_app(
+        settings,
+        snapshot_source=github,
+        providers=list(providers),
+        archive_source=archive or FakeArchiveSource(HEAD_FILES),
+    )
+    return _Apps.clients.enter_context(local_client(app, raise_server_exceptions=False))
 
 
 def test_returns_a_checked_verdict_for_each_claim_with_the_snapshot() -> None:
@@ -269,3 +319,174 @@ def test_bad_links_never_reach_github_or_the_model() -> None:
     assert response.json()["error"]["code"] == "invalid_pr_url"
     assert fake.requests == []
     assert provider.requests == []
+
+
+REFUND_QUOTE = "Adds refund_once so refunds are idempotent."
+REFUND_CLAIM: dict[str, Any] = {
+    "id": "c1",
+    "quote": REFUND_QUOTE,
+    "statement": "Adds `refund_once`, so a repeated refund doesn't refund twice.",
+    "kind": "behavior",
+}
+
+
+def code(start: int, end: int, quote: str = "") -> dict[str, Any]:
+    return {
+        "path": "src/refunds.py",
+        "start_line": start,
+        "end_line": end,
+        "commit": HEAD_SHA[:7],
+        "quote": quote,
+    }
+
+
+def refund_pull_request() -> FakeGitHub:
+    fake = FakeGitHub()
+    fake.pull["body"] = f"{REFUND_QUOTE} Covered by tests."
+    return fake
+
+
+def review_refund(client: TestClient) -> dict[str, Any]:
+    response = client.post("/api/verdicts", json={"pr_url": PR_URL, "claims": [REFUND_CLAIM]})
+    assert response.status_code == 200
+    verdicts: dict[str, Any] = response.json()["verdicts"]
+    return verdicts
+
+
+def test_a_code_citation_at_the_head_commit_is_checked_and_the_packet_kept() -> None:
+    cited = assessment(
+        "c1",
+        diff_citations=[],
+        check_citations=[],
+        code_citations=[code(4, 5, "def refund_once(order):")],
+    )
+    client = make_client(refund_pull_request(), FakeProvider({"assessments": [cited]}))
+
+    verdicts = review_refund(client)
+
+    [verdict] = verdicts["verdicts"]
+    assert verdict["status"] == "supported"
+    assert verdict["citations"] == [
+        {
+            "kind": "code",
+            "path": "src/refunds.py",
+            "start_line": 4,
+            "end_line": 5,
+            "commit": HEAD_SHA,
+        }
+    ]
+    assert verdicts["dropped_citations"] == 0
+    assert re.fullmatch(r"[0-9a-f]{64}", verdicts["packet_hash"])
+    [stored] = (_Apps.root / "data" / "packets").rglob("*.json")
+    assert stored.name == f"{verdicts['packet_hash']}.json"
+    assert stored.parent.name == HEAD_SHA
+
+
+def test_a_code_citation_to_a_line_the_model_wasnt_shown_is_dropped_and_counted() -> None:
+    unshown = assessment("c1", diff_citations=[], code_citations=[code(25, 25)])
+    client = make_client(refund_pull_request(), FakeProvider({"assessments": [unshown]}))
+
+    verdicts = review_refund(client)
+
+    [verdict] = verdicts["verdicts"]
+    assert verdicts["dropped_citations"] == 1
+    assert all(citation["kind"] != "code" for citation in verdict["citations"])
+
+
+def test_when_the_repository_cant_be_read_the_review_says_so_and_never_approves() -> None:
+    archive = FakeArchiveSource(HEAD_FILES)
+    archive.fail_download = CheckoutUnavailableError("GitHub didn't send the repository.")
+    client = make_client(FakeGitHub(), FakeProvider(REPLY), archive=archive)
+
+    response = client.post("/api/verdicts", json={"pr_url": PR_URL, "claims": CLAIMS})
+
+    assert response.status_code == 200
+    verdicts = response.json()["verdicts"]
+    [limitation] = [item for item in verdicts["scope_limitations"] if "couldn't be read" in item]
+    assert limitation.startswith(f"The repository at {HEAD_SHA[:7]} couldn't be read")
+    assert "GitHub didn't send the repository." in limitation
+    first = verdicts["verdicts"][0]
+    assert first["status"] == "supported"
+    assert INCOMPLETE_NOTE in first["notes"]
+
+
+def leaky_github_archive() -> GitHubArchiveSource:
+    """The real archive client over a GitHub whose download fails with the tokens in the error."""
+    fake = FakeGitHubArchive(HEAD_FILES)
+    fake.routes[f"/repos/acme/shop/git/trees/{HEAD_SHA}"] = lambda _: httpx.Response(
+        200, json=fake.tree_body()
+    )
+    fake.routes[f"/repos/acme/shop/tarball/{HEAD_SHA}"] = lambda _: httpx.Response(
+        302, headers={"location": LOCATION}
+    )
+    fake.codeload = leaky_failure
+    return GitHubArchiveSource(lambda: TOKEN_SENTINEL, transport=fake.transport())
+
+
+def logged_text(caplog: pytest.LogCaptureFixture) -> str:
+    formatter = logging.Formatter()
+    lines = []
+    for record in caplog.records:
+        lines.append(f"{record.getMessage()} {record.__dict__}")
+        if record.exc_info:
+            lines.append(formatter.formatException(record.exc_info))
+    return "\n".join(lines)
+
+
+@pytest.mark.parametrize(
+    ("reply", "status"),
+    [
+        (REPLY, 200),
+        (ProviderTimeoutError("Too slow. Try again."), 504),
+        (RuntimeError("the model client broke"), 500),
+    ],
+)
+def test_download_tokens_never_reach_the_response_or_the_logs(
+    caplog: pytest.LogCaptureFixture, reply: object, status: int
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    archive = leaky_github_archive()
+    client = make_client(FakeGitHub(), FakeProvider(reply), archive=archive)
+
+    response = client.post("/api/verdicts", json={"pr_url": PR_URL, "claims": CLAIMS})
+
+    assert response.status_code == status
+    assert any("Reviewing without the repository" in r.getMessage() for r in caplog.records)
+    logged = logged_text(caplog)
+    for sentinel in SENTINELS:
+        assert sentinel not in response.text
+        assert sentinel not in logged
+
+
+def test_a_second_review_at_the_same_commit_reuses_the_checkout_and_the_packet() -> None:
+    """AC1 and AC7 end to end: one download per head commit, the same packet bytes each time."""
+    archive = FakeArchiveSource(HEAD_FILES)
+    reply = {"assessments": [assessment("c1")]}
+    client = make_client(refund_pull_request(), FakeProvider(reply, reply), archive=archive)
+
+    first = review_refund(client)
+    second = review_refund(client)
+
+    assert (archive.tree_calls, archive.download_calls) == (1, 1)
+    assert archive.blob_requests == []
+    assert re.fullmatch(r"[0-9a-f]{64}", first["packet_hash"])
+    assert second["packet_hash"] == first["packet_hash"]
+    [stored] = (_Apps.root / "data" / "packets").rglob("*.json")
+    assert stored.name == f"{first['packet_hash']}.json"
+
+
+def test_the_model_reads_the_repository_evidence_from_the_packet() -> None:
+    """AC9: the prompt carries the test mapping, the search hit and the definition, gutter-numbered."""
+    provider = FakeProvider({"assessments": [assessment("c1")]})
+    client = make_client(refund_pull_request(), provider)
+
+    review_refund(client)
+
+    [request] = provider.requests
+    prompt = request.user_content
+    evidence = prompt[prompt.index("Tests for the changed source files:") :]
+    assert "- src/refunds.py (Python): changed tests: tests/test_refunds.py" in evidence
+    assert '--- src/refunds.py:4 (search term "refund_once") ---' in evidence
+    assert "Definition: --- function refund_once in src/refunds.py, lines 4-7 ---" in evidence
+    assert "      4 | def refund_once(order):" in evidence
+    assert "      7 |     return order.refund()" in evidence

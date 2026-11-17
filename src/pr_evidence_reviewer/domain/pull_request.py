@@ -57,6 +57,16 @@ def parse_pull_request_url(url: str) -> PullRequestRef:
     return PullRequestRef(owner=owner, repo=repo.removesuffix(".git"), number=number)
 
 
+def split_repo_full_name(full_name: object) -> tuple[str, str] | None:
+    """`owner/repo` from GitHub (e.g. a fork's `head.repo.full_name`), or None if it isn't valid."""
+    if not isinstance(full_name, str):
+        return None
+    owner, slash, repo = full_name.partition("/")
+    if not slash or not _OWNER.match(owner) or not _REPO.match(repo) or repo in {".", ".."}:
+        return None
+    return owner, repo
+
+
 class CommitRef(BaseModel, frozen=True):
     ref: str
     sha: str
@@ -104,6 +114,10 @@ class PullRequestSnapshot(BaseModel, frozen=True):
     html_url: str
     base: CommitRef
     head: CommitRef
+    head_repo: str | None = Field(
+        default=None,
+        description="`owner/repo` the head commit lives in, when GitHub reports it (forks).",
+    )
     changed_files_count: int
     files: list[ChangedFile]
     checks: list[CheckResult]

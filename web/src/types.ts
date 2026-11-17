@@ -88,6 +88,15 @@ export interface DiffCitation {
   end_line: number;
 }
 
+/** Lines of a file at the head commit, which the pull request may not have changed. */
+export interface CodeCitation {
+  kind: "code";
+  path: string;
+  start_line: number;
+  end_line: number;
+  commit: string;
+}
+
 export interface CheckCitation {
   kind: "check";
   name: string;
@@ -96,7 +105,7 @@ export interface CheckCitation {
   conclusion: string | null;
 }
 
-export type Citation = DiffCitation | CheckCitation;
+export type Citation = DiffCitation | CodeCitation | CheckCitation;
 
 export interface ClaimVerdict {
   claim_id: string;
@@ -117,6 +126,7 @@ export interface VerdictSet {
   scope_limitations: string[];
   provider: string | null;
   model: string | null;
+  packet_hash: string | null;
 }
 
 export interface VerdictsResponse {

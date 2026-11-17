@@ -1,4 +1,4 @@
-"""POST /api/verdicts: a first-pass verdict for each claim, from the snapshot's diff and CI checks.
+"""POST /api/verdicts: a first-pass verdict for each claim, from the evidence at the head commit.
 
 The browser sends back the claims that /api/claims returned. The snapshot is fetched again here,
 and each claim's quote must still appear in the pull request's text. Only the quote is checked: the
@@ -28,7 +28,7 @@ from pr_evidence_reviewer.review.claim_extraction import (
     grounding_text,
     is_grounded,
 )
-from pr_evidence_reviewer.review.verdicts import ClaimAssessor
+from pr_evidence_reviewer.review.standard import StandardReview
 
 MAX_CLAIM_ID_CHARS = 10
 MAX_STATEMENT_CHARS = 2_000
@@ -84,8 +84,9 @@ async def assess_claims(
     ref = parse_pull_request_url(body.pr_url)
     # Same rules as /api/claims, and resolved before calling GitHub so a bad choice fails fast.
     providers: list[LLMProvider] = request.app.state.providers
-    assessor = ClaimAssessor(select_provider(providers, body.provider))
+    provider = select_provider(providers, body.provider)
     snapshot = await source.fetch_snapshot(ref)
     ensure_grounded(body.claims, snapshot)
-    verdicts = await assessor.assess(snapshot, body.claims)
+    review = StandardReview(provider, request.app.state.checkouts, request.app.state.packets)
+    verdicts = await review.run(snapshot, body.claims)
     return VerdictsResponse(snapshot=snapshot, verdicts=verdicts)

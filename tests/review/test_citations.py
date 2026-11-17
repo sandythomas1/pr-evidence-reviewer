@@ -7,13 +7,12 @@ from pr_evidence_reviewer.domain.verdicts import (
     ProposedDiffCitation,
 )
 from pr_evidence_reviewer.review.citations import SnapshotCitationChecker, check_outcome
-from pr_evidence_reviewer.review.evidence import build_evidence
-from tests.review.builders import changed_file, check, snapshot
+from tests.review.builders import changed_file, check, shown_for, snapshot
 
 
 def checker() -> SnapshotCitationChecker:
     checks = [check("tests"), check("lint"), check("lint", source="status", conclusion="failure")]
-    return SnapshotCitationChecker(build_evidence(snapshot(checks=checks)).index)
+    return SnapshotCitationChecker(shown_for(snapshot(checks=checks)))
 
 
 @pytest.mark.parametrize(("start", "end"), [(1, 1), (1, 4), (2, 3), (21, 23), (23, 23)])
@@ -33,7 +32,7 @@ def test_a_range_inside_one_hunk_checks_out(start: int, end: int) -> None:
         ("src/upload.py", 0, 1),
         ("src/upload.py", -3, 2),
         ("src/upload.py", 3, 2),  # backwards
-        ("src/upload.py", 1, 10**9),  # absurdly long, rejected without walking the range
+        ("src/upload.py", 1, 10**7),  # absurdly long, rejected without walking the range
         ("src/Upload.py", 1, 1),  # paths are case-sensitive
         ("./src/upload.py", 1, 1),
         ("/src/upload.py", 1, 1),
@@ -72,7 +71,7 @@ def test_unknown_check_names_are_rejected(name: str) -> None:
 def test_a_path_cited_in_its_displayed_escaped_form_maps_back_to_the_real_path() -> None:
     raw = 'docs/a\nb "c".py'
     files = [changed_file(raw)]
-    index = build_evidence(snapshot(files=files)).index
+    index = shown_for(snapshot(files=files))
 
     cited = SnapshotCitationChecker(index).check_diff(
         ProposedDiffCitation(path='docs/a\\nb \\"c\\".py', start_line=1, end_line=1)

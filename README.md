@@ -63,6 +63,42 @@ serves the UI with hot reload and forwards `/api` to the runner.
 The runner only answers requests addressed to `localhost`, `127.0.0.1`, or `[::1]`, so a web page can't
 reach it through DNS rebinding.
 
+## What a review looks at
+
+A standard review gives the model one evidence packet for the PR's head commit:
+
+- the diff and the CI check results for that commit;
+- the tests found for each changed source file, from the changed files and the repository's test-file
+  conventions;
+- the function or class around each change;
+- search results and definitions for the names and files each claim mentions.
+
+To get the repository's files, the runner downloads GitHub's archive of the head commit and checks every
+file against the commit's file list ([ADR 0003](docs/decisions/0003-checkout-from-github-archive.md)). It
+doesn't use git and never runs the repository's code. The first review of a commit can take minutes for a
+large repository; later reviews of the same commit reuse the saved copy. If the repository can't be read,
+the review uses only the diff and CI checks, says so, and marks the evidence incomplete.
+
+### What's kept on your computer
+
+| What | Where | How long |
+|---|---|---|
+| Saved repository copies | `checkouts` in the cache folder | Removed after 7 days unused, or sooner, least recently used first, once they pass 2 GiB. Removal only happens while `prev` is running. |
+| Evidence packets | `packets` in the data folder | Removed after 7 days. Removal only happens while `prev` is running. |
+
+| | Cache folder | Data folder |
+|---|---|---|
+| Windows | `%LOCALAPPDATA%\pr-evidence-reviewer\Cache` | `%LOCALAPPDATA%\pr-evidence-reviewer` |
+| macOS | `~/Library/Caches/pr-evidence-reviewer` | `~/Library/Application Support/pr-evidence-reviewer` |
+| Linux | `~/.cache/pr-evidence-reviewer` | `~/.local/share/pr-evidence-reviewer` |
+
+Saved repository copies can hold private source code. To delete them now:
+
+```sh
+uv run prev cache clear             # delete saved repository copies
+uv run prev cache clear --packets   # also delete saved evidence packets
+```
+
 ## Contributing
 
 Work happens on feature branches, which are merged into `dev` through pull requests. `dev` is promoted to

@@ -106,7 +106,12 @@ describe("ClaimsView", () => {
       );
       expect(claimItem(1)).toHaveTextContent("Insufficient evidence");
       expect(screen.getByText(/1 citation in all was left out/)).toBeInTheDocument();
-      expect(screen.getByText(/You make the approval decision/)).toBeInTheDocument();
+      expect(screen.getByText(/You make the approval decision/)).toHaveTextContent(
+        "Each verdict covers only the evidence the reviewer could read at this commit: the diff " +
+          "and the CI checks, plus, when the repository could be read, a search of its code, its " +
+          "tests, and the functions and classes around each change. Anything under “Not checked” " +
+          "wasn't used.",
+      );
       expect(screen.getByRole("region", { name: "Not checked" })).toHaveTextContent(
         "No diff is available for a.png.",
       );
@@ -158,7 +163,10 @@ describe("ClaimsView", () => {
 
       const section = screen.getByRole("region", { name: "Claims (2)" });
       expect(section).toHaveAttribute("aria-busy", "true");
-      expect(section).toHaveTextContent("Checking each claim against the diff");
+      expect(section).toHaveTextContent(
+        "Checking each claim against the diff, the repository's code and tests, and the CI " +
+          "checks. The first review of a commit can take a few minutes…",
+      );
     });
   });
 });

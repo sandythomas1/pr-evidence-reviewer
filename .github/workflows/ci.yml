@@ -15,13 +15,21 @@ concurrency:
 
 jobs:
   python:
-    name: Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Ubuntu jobs keep their existing names so required status checks still match.
+    name: Python ${{ matrix.python-version }}${{ matrix.os != 'ubuntu-latest' && format(' ({0})', matrix.os) || '' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.12", "3.13"]
+        # Checkout paths, junctions and the native tree-sitter wheels differ per OS.
+        include:
+          - os: windows-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

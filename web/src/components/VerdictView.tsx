@@ -2,6 +2,7 @@ import type {
   CheckCitation,
   ClaimStatus,
   ClaimVerdict,
+  CodeCitation,
   DiffCitation,
   PullRequestRef,
   VerdictSet,
@@ -42,11 +43,13 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/;
 // GitHub renders these as documents, where line anchors only work in the plain view.
 const RENDERED_DOCS = /\.(md|markdown|mdx|rst|adoc|org)$/i;
 
+type LineCitation = DiffCitation | CodeCitation;
+
 /** A link to the cited lines at the reviewed commit, or null if the commit id isn't one. */
 export function citationUrl(
   repo: PullRequestRef,
   headSha: string,
-  citation: DiffCitation,
+  citation: LineCitation,
 ): string | null {
   if (!COMMIT_SHA.test(headSha)) return null;
   const path = citation.path.split("/").map(encodeURIComponent).join("/");
@@ -57,7 +60,7 @@ export function citationUrl(
   return `https://github.com/${owner}/${name}/blob/${headSha}/${path}${plain}#${lines}`;
 }
 
-function lineRange({ start_line: start, end_line: end }: DiffCitation) {
+function lineRange({ start_line: start, end_line: end }: LineCitation) {
   return start === end ? `line ${String(start)}` : `lines ${String(start)}–${String(end)}`;
 }
 
@@ -75,7 +78,7 @@ function DiffCitationItem({
   repo,
   headSha,
 }: {
-  citation: DiffCitation;
+  citation: LineCitation;
   repo: PullRequestRef;
   headSha: string;
 }) {
@@ -83,6 +86,7 @@ function DiffCitationItem({
   const label = (
     <>
       <code>{citation.path}</code>, {lineRange(citation)}
+      {citation.kind === "code" && " (repository code)"}
     </>
   );
   if (!url) return <li>{label}</li>;
@@ -144,7 +148,7 @@ export function ClaimVerdictView({
           <h4>Evidence</h4>
           <ul className="citations">
             {citations.map((citation, index) =>
-              citation.kind === "diff" ? (
+              citation.kind === "diff" || citation.kind === "code" ? (
                 <DiffCitationItem
                   key={String(index)}
                   citation={citation}
