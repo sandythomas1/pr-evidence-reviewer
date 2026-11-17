@@ -204,3 +204,25 @@ token, path traversal, ReDoS), domain (evidence-gap semantics, verdict downgrade
   The stand-in carries the backend's exact strings.
 - ux-language-advocate (scoped re-check, continued): *Did the round-2 copy close U1–U3 as shown in the new
   screenshots, without opening a new misleading state?* Dispatched.
+- UX scoped re-check: **APPROVE**. U1–U3 closed in the re-captured screenshots, with no new blocking problem. review.md
+  now has no open blocking finding.
+
+## Phase 6: Ship (2026-11-16, standing rule §9)
+- Commits on feature/2-evidence-packet, parent dev 60f3081: one per issue (#12 → #13 → #14 → #15 → #17 → #16) from the
+  per-issue snapshot trees, plus "Address review findings" (tree 3068d04). The secret scan of the staged diff was clean.
+- PR #51 into dev (non-draft): https://github.com/sandythomas1/pr-evidence-reviewer/pull/51. Not merged.
+- Board: #12–#17 → Agent Review, each with a comment linking #51. Follow-up #52 (S8: Python ≥ 3.12.12 plus pip-audit)
+  added to the board.
+
+## Phase 7: Learn and close
+- Lessons appended: "tree-sitter 0.26.0 `Point.row` corrupts memory on Windows with Python 3.12"; "A stand-in API with
+  empty notes hides the backend-generated UI from screenshot review". The maxTurns lesson already exists 4 times, so it
+  wasn't duplicated.
+- Routing note: the B1–B4 batch sizes (5 to 13 tasks) were too large for the 60-turn cap. Every batch needed a
+  continuation, as the existing lessons predicted.
+- Final roster: architect, security-reviewer, critic, implementer, qa-tester, ux-language-advocate. Skipped:
+  product-owner (clear spec), domain-expert (the domain rules were already in the constitution), devops (CI change
+  covered by the implementer).
+- Dispatches: 15 fresh (one critic lost in the crash) plus 11 SendMessage continuations, 26 in total.
+- Remaining: task 41 `[~]` until PR #51's CI is green on Linux and macOS. Delete docs/current_feature_plans/evidence-packet.md
+  once #51 merges.
