@@ -6,7 +6,7 @@ import io
 import os
 import sys
 import tarfile
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -138,12 +138,18 @@ class FakeArchiveSource:
             out.write(self.archive)
 
     async def fetch_blobs(
-        self, source: RepoName, shas: Sequence[str], max_bytes: int
-    ) -> dict[str, bytes]:
+        self,
+        source: RepoName,
+        shas: Sequence[str],
+        max_bytes: int,
+        receive: Callable[[str, bytes], Awaitable[None]],
+    ) -> None:
         self.blob_requests.append(list(shas))
         if self.fail_blobs is not None:
             raise self.fail_blobs
-        return {sha: self.blobs[sha] for sha in shas if sha in self.blobs}
+        for sha in shas:
+            if sha in self.blobs:
+                await receive(sha, self.blobs[sha])
 
 
 def files_under(root: Path) -> list[str]:

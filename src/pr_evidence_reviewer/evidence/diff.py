@@ -1,13 +1,14 @@
 """Diff hunks, low-value paths and CI-setup detection, shared by the packet, search and test mapping.
 
 A hunk numbers every line that exists on the head side, so the model can cite real lines; removed
-lines get no number.
+lines get no number. Line-breaking characters inside a line are shown as escapes (threat T10).
 """
 
 import re
 from dataclasses import dataclass
 
 from pr_evidence_reviewer.domain.pull_request import ChangedFile
+from pr_evidence_reviewer.evidence.escape import visible
 
 _HUNK_HEADER = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
 _GUTTER = 7
@@ -92,7 +93,8 @@ def _render_hunk(header: re.Match[str], body: list[str]) -> Hunk:
     for raw in body:
         if old_left <= 0 and new_left <= 0:
             break
-        marker, content = (raw[0], raw[1:]) if raw else (" ", "")
+        # A CRLF file's lines end in one `\r`, as `split_lines` strips from file content.
+        marker, content = (raw[0], visible(raw[1:].removesuffix("\r"))) if raw else (" ", "")
         if marker == "-":
             lines.append(f"{'':>{_GUTTER}} - {content}")
             old_left -= 1

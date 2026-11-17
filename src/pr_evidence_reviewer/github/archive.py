@@ -12,7 +12,7 @@ import base64
 import binascii
 import os
 import re
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -106,30 +106,32 @@ class GitHubArchiveSource:
         raise CheckoutUnavailableError(TIMED_OUT) from None
 
     async def fetch_blobs(
-        self, source: RepoName, shas: Sequence[str], max_bytes: int
-    ) -> dict[str, bytes]:
-        """Fetch up to 300 blobs, 8 at a time. A blob GitHub can't serve is left out; auth, rate
-        limit and transport failures fail the whole call so nothing half-fetched is cached."""
+        self,
+        source: RepoName,
+        shas: Sequence[str],
+        max_bytes: int,
+        receive: Callable[[str, bytes], Awaitable[None]],
+    ) -> None:
+        """Fetch up to 300 blobs, 8 at a time, handing each to `receive` as it arrives, so at most
+        8 are held in memory (threat T6). A blob GitHub can't serve is left out; auth, rate limit
+        and transport failures fail the whole call so nothing half-fetched is cached."""
         wanted = [sha for sha in list(dict.fromkeys(shas))[:MAX_REFETCH] if _SHA.match(sha)]
         if not wanted:
-            return {}
+            return
         token = await asyncio.to_thread(self._tokens)
         limit = asyncio.Semaphore(REFETCH_CONCURRENCY)
         async with self._api(token) as http:
 
-            async def fetch(sha: str) -> tuple[str, bytes | None]:
+            async def fetch(sha: str) -> None:
                 async with limit:
-                    return sha, await _fetch_blob(http, source, sha, max_bytes)
+                    data = await _fetch_blob(http, source, sha, max_bytes)
+                    if data is not None:
+                        await receive(sha, data)
 
             results = await asyncio.gather(*(fetch(sha) for sha in wanted), return_exceptions=True)
-        blobs: dict[str, bytes] = {}
         for result in results:
             if isinstance(result, BaseException):
                 raise result
-            sha, data = result
-            if data is not None:
-                blobs[sha] = data
-        return blobs
 
     async def _archive_location(self, token: str, source: RepoName, sha: str) -> httpx.URL:
         async with self._api(token) as http:

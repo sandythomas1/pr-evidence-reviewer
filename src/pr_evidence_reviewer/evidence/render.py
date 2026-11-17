@@ -2,14 +2,14 @@
 
 Rendering is pure: the same packet gives the same bytes. Every line that comes from the repository
 (diff lines, search context, symbol lines) starts with a line-number gutter, so no file content can
-start a line as a `===` header or a boundary marker. Every name (paths, check names, symbols, search
-terms) is escaped so a line break in it can't start a new line (threat T10).
+start a line as a `===` header or a boundary marker, and line-breaking characters in that content are
+shown as escapes. Every name (paths, check names, symbols, search terms) is escaped the same way, so
+nothing in it can start a new line (threat T10).
 
 `ShownIndex` records the diff lines, repository lines and CI checks the text shows, so a citation is
 only accepted for something the model actually saw.
 """
 
-import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
@@ -23,6 +23,7 @@ from pr_evidence_reviewer.domain.evidence import (
     TestMapping,
 )
 from pr_evidence_reviewer.domain.pull_request import CheckResult
+from pr_evidence_reviewer.evidence.escape import inline, visible
 
 _GUTTER = 7
 
@@ -149,12 +150,12 @@ def _symbol_block(symbol: SymbolEvidence) -> str:
 
 def _claim_block(claim: ClaimEvidence, symbols: dict[str, SymbolEvidence]) -> list[str]:
     lines = [f"Repository evidence for claim {_inline(claim.claim_id)}:"]
-    terms = ", ".join(json.dumps(query, ensure_ascii=False) for query in claim.queries)
+    terms = ", ".join(f'"{_inline(query)}"' for query in claim.queries)
     lines.append(f"Search terms: {terms or '(none)'}")
     if claim.files:
         lines.append("Files the claim names: " + ", ".join(_inline(path) for path in claim.files))
     for hit in claim.hits:
-        term = json.dumps(hit.query, ensure_ascii=False)
+        term = f'"{_inline(hit.query)}"'
         lines.append(f"--- {_inline(hit.path)}:{hit.line} (search term {term}) ---")
         lines.extend(_numbered(hit.context))
     for symbol_id in claim.definition_ids:
@@ -165,7 +166,7 @@ def _claim_block(claim: ClaimEvidence, symbols: dict[str, SymbolEvidence]) -> li
 
 
 def _numbered(lines: Iterable[tuple[int, str]]) -> list[str]:
-    return [f"{number:>{_GUTTER}} | {text}" for number, text in lines]
+    return [f"{number:>{_GUTTER}} | {visible(text)}" for number, text in lines]
 
 
 def _check_line(check: CheckResult) -> str:
@@ -182,4 +183,4 @@ def _checks_by_name(checks: Iterable[CheckResult]) -> dict[str, tuple[CheckResul
 
 def _inline(text: str) -> str:
     """Escape line breaks and other control characters so a name can't start a new line."""
-    return json.dumps(text, ensure_ascii=False)[1:-1]
+    return inline(text)

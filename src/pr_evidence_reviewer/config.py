@@ -11,7 +11,8 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 DEFAULT_CHECKOUT_CACHE_MAX_BYTES = 2 * 1024**3
-DEFAULT_CHECKOUT_TTL = timedelta(days=7)
+# How long a saved repository copy or evidence packet is kept unused (review S9: one setting).
+DEFAULT_RETENTION_TTL = timedelta(days=7)
 
 
 def _default_web_dist() -> Path:
@@ -39,7 +40,7 @@ class Settings:
     cache_dir: Path = field(default_factory=_default_cache_dir)
     data_dir: Path = field(default_factory=_default_data_dir)
     checkout_cache_max_bytes: int = DEFAULT_CHECKOUT_CACHE_MAX_BYTES
-    checkout_ttl: timedelta = DEFAULT_CHECKOUT_TTL
+    retention_ttl: timedelta = DEFAULT_RETENTION_TTL
 
     @property
     def packets_dir(self) -> Path:

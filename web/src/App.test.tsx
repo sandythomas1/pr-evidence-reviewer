@@ -278,7 +278,8 @@ describe("App", () => {
     await user.type(screen.getByLabelText("Pull request link"), `${LINK}{Enter}`);
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Found 2 claims. Checking them against the code and the CI checks…",
+      "Found 2 claims. Checking them against the diff, the repository's code and tests, and the CI " +
+        "checks. This can take a few minutes…",
     );
     expect(loadVerdicts).toHaveBeenCalledWith(LINK, found.claims.claims, "claude_code");
     expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();

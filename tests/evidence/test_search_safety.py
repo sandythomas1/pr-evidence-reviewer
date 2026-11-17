@@ -38,7 +38,9 @@ def test_a_line_over_the_length_cap_is_never_given_to_the_regex_engine(
     assert time.monotonic() - started < SLACK_SECONDS
     assert result.hits == ()
     assert result.timed_out == ()
-    assert result.limitations == ("Lines over 2,000 characters weren't searched in 1 file.",)
+    assert tuple(item.message for item in result.limitations) == (
+        "Lines over 2,000 characters weren't searched in 1 file.",
+    )
 
 
 @pytest.mark.parametrize("pattern", CATASTROPHIC)
@@ -56,7 +58,7 @@ def test_a_catastrophic_pattern_on_a_50_000_character_line_returns_within_its_ti
     if pattern == "(a+)+$":
         assert result.timed_out == (pattern,)
         assert "The search ran out of time. Search terms not searched in full: 1." in (
-            result.limitations
+            item.message for item in result.limitations
         )
 
 
@@ -126,7 +128,9 @@ def test_a_literal_on_a_line_over_the_length_cap_is_never_matched(tmp_path: Path
     result = search_literal(reader, select_corpus(reader), ["needle"])
 
     assert [(hit.path, hit.line) for hit in result.hits] == [("short.py", 1)]
-    assert result.limitations == ("Lines over 2,000 characters weren't searched in 1 file.",)
+    assert tuple(item.message for item in result.limitations) == (
+        "Lines over 2,000 characters weren't searched in 1 file.",
+    )
 
 
 def test_a_tracked_file_listed_in_gitignore_is_searched(tmp_path: Path) -> None:
@@ -140,6 +144,20 @@ def test_a_tracked_file_listed_in_gitignore_is_searched(tmp_path: Path) -> None:
     result = search_literal(reader, select_corpus(reader), ["BYPASS_AUTH"])
 
     assert [hit.path for hit in result.hits] == ["build-output/flag.py", "secret_config.py"]
+
+
+def test_a_file_in_the_download_but_not_in_the_git_tree_is_never_searched(tmp_path: Path) -> None:
+    """AC4: the file set is the git tree at the head commit, so an untracked archive member is out."""
+    files = {"src/app.py": b"BYPASS_AUTH = False\n"}
+    archived = {**files, "untracked.py": b"BYPASS_AUTH = True\n"}
+    reader = reader_for(tmp_path, files, archived=archived)
+
+    corpus = select_corpus(reader, relevant_paths=["untracked.py"])
+    result = search_literal(reader, corpus, ["BYPASS_AUTH"])
+
+    assert [hit.path for hit in result.hits] == ["src/app.py"]
+    assert not reader.has("untracked.py")
+    assert "untracked.py" not in [entry.path for entry in reader.files()]
 
 
 @pytest.mark.parametrize("folder", ["dist", "vendor"])

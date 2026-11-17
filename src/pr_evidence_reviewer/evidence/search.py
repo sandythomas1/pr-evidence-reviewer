@@ -22,7 +22,7 @@ import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Literal, Protocol
 
 import regex
 
@@ -74,6 +74,16 @@ class Corpus:
 
 
 @dataclass(frozen=True)
+class SearchLimitation:
+    """Why a search didn't cover everything. `incomplete` says whether a verdict may miss evidence:
+    a dropped term or a fired deadline can; skipped very long lines alone don't."""
+
+    kind: Literal["search_limit", "search_timeout"]
+    message: str
+    incomplete: bool
+
+
+@dataclass(frozen=True)
 class SearchHit:
     query: str
     path: RepoPath
@@ -91,7 +101,7 @@ class SearchResult:
     capped: tuple[str, ...]
     # Queries whose search ran out of time before covering the corpus.
     timed_out: tuple[str, ...]
-    limitations: tuple[str, ...]
+    limitations: tuple[SearchLimitation, ...]
 
     def for_query(self, query: str) -> tuple[SearchHit, ...]:
         return tuple(hit for hit in self.hits if hit.query == query)
@@ -109,9 +119,10 @@ def select_corpus(
     limits: SearchLimits = SearchLimits(),
 ) -> Corpus:
     """The files to search, in search order. `relevant_paths` are files a claim names or likely
-    tests: like changed files, they get a skip record when they can't be searched."""
+    tests: like changed files, they get a skip record when they can't be searched. A changed or
+    relevant path the checkout refuses as unsafe gets an `unsafe_name` record (threat T8)."""
     changed = _safe_paths(changed_paths)
-    tracked = changed | _safe_paths(relevant_paths)
+    tracked = {*changed_paths, *relevant_paths}
     entries = sorted(reader.files(), key=lambda entry: (entry.path not in changed, entry.path))
 
     paths: list[RepoPath] = []
@@ -128,6 +139,9 @@ def select_corpus(
         paths.append(RepoPath(entry.path))
     for skip in reader.skipped():
         reasons.setdefault(skip.path, skip.reason)
+    for path in tracked:
+        if normalize_repo_path(path) is None:
+            reasons.setdefault(path, "unsafe_name")
 
     counts = Counter(reasons.values())
     limitations = []
@@ -307,21 +321,33 @@ class _Search:
         return tuple((number + 1, lines[number][:width]) for number in range(first, last))
 
     def _result(self) -> SearchResult:
-        limitations = []
+        limitations: list[SearchLimitation] = []
         if self.dropped:
             limitations.append(
-                "There were too many search terms. "
-                f"Not searched: {_count(self.dropped, 'term')}."
+                SearchLimitation(
+                    "search_limit",
+                    "There were too many search terms. "
+                    f"Not searched: {_count(self.dropped, 'term')}.",
+                    incomplete=True,
+                )
             )
         if self.timed_out:
             limitations.append(
-                "The search ran out of time. "
-                f"Search terms not searched in full: {len(self.timed_out)}."
+                SearchLimitation(
+                    "search_timeout",
+                    "The search ran out of time. "
+                    f"Search terms not searched in full: {len(self.timed_out)}.",
+                    incomplete=True,
+                )
             )
         if self.long_line_files:
             limitations.append(
-                f"Lines over {self.limits.max_line_chars:,} characters weren't searched in "
-                f"{_count(self.long_line_files, 'file')}."
+                SearchLimitation(
+                    "search_limit",
+                    f"Lines over {self.limits.max_line_chars:,} characters weren't searched in "
+                    f"{_count(self.long_line_files, 'file')}.",
+                    incomplete=False,
+                )
             )
         return SearchResult(
             queries=tuple(self.queries),

@@ -96,7 +96,9 @@ anything outside the diff.
 - [ ] AC6 For each of the five languages, a changed hunk maps to its enclosing function/class with line
       range, and a symbol name maps to its definition; an unsupported language falls back without error.
 - [ ] AC7 Two builds of the packet for the same SHA and claims are byte-identical with the same content
-      hash; an oversized PR records a scope limitation; the packet is stored keyed by head SHA.
+      hash when the packet has no `search_timeout` gap (amended per review CR8: a fired search deadline
+      depends on the clock and is recorded as that gap); an oversized PR records a scope limitation; the
+      packet is stored keyed by head SHA.
 - [ ] AC8 Bad paths, out-of-range lines, wrong commits, escaping paths, and mismatched quotes are dropped;
       a verdict with no valid citation becomes insufficient evidence; the dropped count reaches the UI.
 - [ ] AC9 Standard-review verdicts in the running app use the new packet and validator.

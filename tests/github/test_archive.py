@@ -185,11 +185,22 @@ async def test_network_failures_have_no_chained_details() -> None:
     assert raised.value.__context__ is None
 
 
+async def fetched(source: GitHubArchiveSource, shas: list[str], max_bytes: int) -> dict[str, bytes]:
+    """Every blob `fetch_blobs` hands over, in arrival order."""
+    blobs: dict[str, bytes] = {}
+
+    async def receive(sha: str, data: bytes) -> None:
+        blobs[sha] = data
+
+    await source.fetch_blobs(SHOP, shas, max_bytes, receive)
+    return blobs
+
+
 async def test_fetches_blobs_and_leaves_out_the_ones_github_lacks() -> None:
     fake = FakeGitHubArchive(FILES)
     wanted = [git_blob_sha(FILES["README.md"]), "e" * 40, "not-a-sha"]
 
-    blobs = await source_for(fake).fetch_blobs(SHOP, wanted, 1024)
+    blobs = await fetched(source_for(fake), wanted, 1024)
 
     assert blobs == {git_blob_sha(FILES["README.md"]): FILES["README.md"]}
     assert len(fake.requests) == 2
@@ -198,7 +209,7 @@ async def test_fetches_blobs_and_leaves_out_the_ones_github_lacks() -> None:
 async def test_a_blob_over_the_size_cap_is_left_out() -> None:
     fake = FakeGitHubArchive({"big.txt": b"x" * 100})
 
-    blobs = await source_for(fake).fetch_blobs(SHOP, [git_blob_sha(b"x" * 100)], 10)
+    blobs = await fetched(source_for(fake), [git_blob_sha(b"x" * 100)], 10)
 
     assert blobs == {}
 
@@ -209,13 +220,13 @@ async def test_a_rate_limited_blob_fails_the_whole_refetch() -> None:
     fake.routes[f"/repos/acme/shop/git/blobs/{sha}"] = lambda _: httpx.Response(429)
 
     with pytest.raises(CheckoutUnavailableError, match="didn't allow"):
-        await source_for(fake).fetch_blobs(SHOP, [sha, git_blob_sha(FILES["src/app.py"])], 1024)
+        await fetched(source_for(fake), [sha, git_blob_sha(FILES["src/app.py"])], 1024)
 
 
 async def test_refetch_asks_for_at_most_300_blobs() -> None:
     fake = FakeGitHubArchive({})
 
-    await source_for(fake).fetch_blobs(SHOP, [f"{i:040x}" for i in range(400)], 1024)
+    await fetched(source_for(fake), [f"{i:040x}" for i in range(400)], 1024)
 
     assert len(fake.requests) == 300
 
@@ -226,6 +237,6 @@ async def test_only_get_requests_are_sent(tmp_path: Path) -> None:
 
     await source.fetch_tree(TARGET)
     await source.download_archive(SHOP, HEAD_SHA, tmp_path / "a", 1024 * 1024)
-    await source.fetch_blobs(SHOP, [git_blob_sha(FILES["README.md"])], 1024)
+    await fetched(source, [git_blob_sha(FILES["README.md"])], 1024)
 
     assert {r.method for r in fake.requests} == {"GET"}

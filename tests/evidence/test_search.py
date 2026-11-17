@@ -49,11 +49,16 @@ def test_changed_or_claim_relevant_files_that_cannot_be_searched_are_recorded(
     ]
 
 
-def test_unsafe_changed_or_relevant_paths_are_ignored(reader: CheckoutReader) -> None:
+def test_unsafe_changed_or_relevant_paths_are_recorded_not_searched(
+    reader: CheckoutReader,
+) -> None:
     corpus = select_corpus(reader, changed_paths=["../x"], relevant_paths=["C:/x"])
 
     assert corpus.paths == ("README.md", "src/retry.py", "src/upload.py")
-    assert corpus.skipped == ()
+    assert [(skip.path, skip.reason) for skip in corpus.skipped] == [
+        ("../x", "unsafe_name"),
+        ("C:/x", "unsafe_name"),
+    ]
 
 
 def test_files_over_the_size_cap_are_skipped(tmp_path: Path) -> None:
@@ -153,7 +158,9 @@ def test_queries_are_deduplicated_and_capped_with_a_limitation(reader: CheckoutR
     result = search_literal(reader, corpus, queries, limits=SearchLimits(max_queries=3))
 
     assert result.queries == ("MAX_RETRIES", "q0", "q1")
-    assert result.limitations == ("There were too many search terms. Not searched: 3 terms.",)
+    assert tuple(item.message for item in result.limitations) == (
+        "There were too many search terms. Not searched: 3 terms.",
+    )
 
 
 def test_hits_are_capped_per_file_and_per_query_in_corpus_order(tmp_path: Path) -> None:
@@ -218,6 +225,6 @@ def test_the_phase_deadline_stops_a_literal_search_with_a_timeout(reader: Checko
 
     assert result.hits == ()
     assert result.timed_out == ("MAX_RETRIES", "upload")
-    assert result.limitations == (
+    assert tuple(item.message for item in result.limitations) == (
         "The search ran out of time. Search terms not searched in full: 2.",
     )

@@ -1,6 +1,6 @@
 # Tasks: Evidence packet (Week 2, #12–#17)
 
-> **Phase:** Tasks · **Status:** draft · **Date:** 2026-11-16
+> **Phase:** Tasks · **Status:** done (task 41 [~] until Linux/macOS CI is green) · **Date:** 2026-11-16
 > Derived from `plan.md` (adjudication applied). One commit per issue, in order #12 → #13 → #14 → #15 → #17 → #16.
 > Every implementer task ships its own unit tests; the `@qa` tasks are the adversarial/hermetic suites and must pass
 > before the issue's commit. Network, git and real repos are never used in tests (MockTransport, crafted tar.gz).
@@ -25,7 +25,7 @@
   `uv add --dev "types-regex==2026.9.29.20261030" "hypothesis==6.170.14"`. Files: `pyproject.toml`, `uv.lock`.
   Done: `uv sync --locked` + existing 372 tests green; no other dep moved except transitive. @implementer · #12/#13/#15 · plan: Stack & Dependencies, D4
 - [x] 2. `Settings` gains `cache_dir`, `data_dir` (platformdirs defaults, `appauthor=False`), `checkout_cache_max_bytes`
-  (2 GiB), `checkout_ttl` (7 days); tests inject `tmp_path`. Files: `config.py`, `tests/test_config.py`.
+  (2 GiB), `retention_ttl` (7 days, shared with packets; renamed from `checkout_ttl` in fix round 1); tests inject `tmp_path`. Files: `config.py`, `tests/test_config.py`.
   (dep: 1) @implementer · #12 AC1 · L2-2 · plan: D2 Location, D2 Retention
 - [~] 3. Add `windows-latest` and `macos-latest` py3.12 jobs to the Python matrix (same steps). File:
   `.github/workflows/ci.yml`. Done: workflow lints (`actionlint` or a dry PR run) and junction tests run on Windows.
@@ -179,9 +179,11 @@
   locations, 7-day TTL, `prev cache clear [--packets]`, first review can take minutes. (dep: 35) @implementer · #12/#16 · plan: ADR draft, D2
 
 ## Verification (maps 1:1 to spec Acceptance Criteria)
-- [ ] 41. @qa Run the full gate (ruff, black, mypy, pytest, web lint/test/build) on all 3 CI OSes and tick each AC:
+- [~] 41. @qa Run the full gate (ruff, black, mypy, pytest, web lint/test/build) on all 3 CI OSes and tick each AC:
   - AC1 → 15 · AC2 → 11, 14 · AC3 → 13, 15 · AC4 → 18 · AC5 → 20 · AC6 → 22, 23 · AC7 → 38, 37 · AC8 → 27, 28, 39 · AC9 → 36, 37, 39
   - Threats: T1 → 11 · T2 → 11 · T3 → 12, 39 · T4 → 13 · T5 → 18 · T6 → 14, 23 · T7 → 27 · T8 → 18, 37 · T9 → 15 ·
     T10 → 36 · T11 → 15. (dep: 3, 24, 29, 36–40)
+  - Partial (2026-11-16): gate green on Windows locally and every AC and T is mapped in `verification.md`.
+    The Linux and macOS CI run and the screenshots are still open.
 - [ ] 42. Capture non-obvious learnings in `C:/Users/sandy/Desktop/dev/memory/lessons_learned.md` (e.g. content-addressed
   store removing a threat class; single-pass search for determinism). (dep: 41) @implementer

@@ -207,9 +207,13 @@ def test_refetched_bytes_are_verified_before_storing(tmp_path: Path) -> None:
     store = BlobStore(tmp_path, LIMITS.max_total_stored_bytes)
     good, bad = git_blob_sha(b"good"), git_blob_sha(b"bad")
 
-    stored = store_refetched(store, {good: b"good", bad: b"tampered"}, [good, bad], LIMITS)
+    wanted = {good, bad}
+    stored = [
+        store_refetched(store, sha, data, wanted, LIMITS)
+        for sha, data in ((good, b"good"), (bad, b"tampered"))
+    ]
 
-    assert stored == 1
+    assert stored == [True, False]
     assert store.has(good)
     assert not store.has(bad)
 

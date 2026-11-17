@@ -12,7 +12,7 @@ import os
 import re
 import tarfile
 import zlib
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Literal, Protocol
@@ -68,6 +68,8 @@ class ArchiveLimits:
     max_total_stored_bytes: int = 1 * GIB
     max_file_bytes: int = 5 * MIB
     max_refetch: int = 300
+    # Total bytes fetched one by one when the archive leaves files out (review S1, threat T6).
+    max_refetch_bytes: int = 128 * MIB
 
 
 @dataclass(frozen=True)
@@ -335,33 +337,42 @@ def _read_member(member: IO[bytes] | None, size: int) -> bytes | None:
 
 @dataclass(frozen=True)
 class RefetchPlan:
-    """Blob shas to fetch one by one (at most `max_refetch`), in path order."""
+    """Blob shas to fetch one by one, in path order: at most `max_refetch` of them and
+    `max_refetch_bytes` in total. `over_budget` are the shas past the byte cap; they are never
+    fetched and are listed as unverified. `capped` is true when either cap left files out."""
 
     shas: tuple[str, ...]
     capped: bool
+    over_budget: tuple[str, ...] = ()
 
 
 def plan_refetch(plan: TreePlan, store: BlobStore, limits: ArchiveLimits) -> RefetchPlan:
-    pending: list[str] = []
+    pending: dict[str, int] = {}
     for path in sorted(plan.candidates):
-        sha = plan.candidates[path].sha
-        if not store.has(sha) and sha not in pending:
-            pending.append(sha)
+        entry = plan.candidates[path]
+        if not store.has(entry.sha):
+            pending.setdefault(entry.sha, entry.size or 0)
+    within_count = list(pending)[: limits.max_refetch]
+    shas: list[str] = []
+    total = 0
+    for sha in within_count:
+        if total + pending[sha] > limits.max_refetch_bytes:
+            break
+        total += pending[sha]
+        shas.append(sha)
+    over_budget = tuple(within_count[len(shas) :])
     return RefetchPlan(
-        shas=tuple(pending[: limits.max_refetch]), capped=len(pending) > limits.max_refetch
+        shas=tuple(shas),
+        capped=len(pending) > limits.max_refetch or bool(over_budget),
+        over_budget=over_budget,
     )
 
 
 def store_refetched(
-    store: BlobStore, blobs: Mapping[str, bytes], wanted: Iterable[str], limits: ArchiveLimits
-) -> int:
-    """Store refetched bytes that verify. Returns how many blobs were stored."""
-    stored = 0
-    for sha in wanted:
-        data = blobs.get(sha)
-        if data is not None and store.add_if_verified(sha, data, limits.max_file_bytes):
-            stored += 1
-    return stored
+    store: BlobStore, sha: str, data: bytes, wanted: Collection[str], limits: ArchiveLimits
+) -> bool:
+    """Store one refetched blob if it was asked for and its bytes verify. True when stored."""
+    return sha in wanted and store.add_if_verified(sha, data, limits.max_file_bytes)
 
 
 def build_manifest(
@@ -378,7 +389,7 @@ def build_manifest(
     """The sorted manifest: stored files, plus a reason for every tree file that wasn't stored."""
     files: list[ManifestFile] = []
     skipped = list(plan.skipped)
-    requested = set(refetch.shas)
+    requested = {*refetch.shas, *refetch.over_budget}
     for path in sorted(plan.candidates):
         entry = plan.candidates[path]
         if store.has(entry.sha):

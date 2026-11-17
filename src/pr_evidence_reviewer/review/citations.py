@@ -148,15 +148,21 @@ class CheckoutCitationChecker(_DropCounter):
         self._head_sha = head_sha
         self._shown = shown
         self._index = index
+        self._skipped = frozenset(skip.path for skip in reader.skipped())
 
     def check_diff(self, proposed: ProposedDiffCitation) -> DiffCitation | None:
-        """Shown in the diff, as before, and also present in the head file of the checkout."""
+        """Shown in the diff, as before, and also present in the head file of the checkout.
+
+        What the model was shown is what it can cite (C4): when the head commit has the file but
+        the checkout holds no readable text for it (undecodable, too large, left out of the
+        download, a refused name, ...), the shown diff lines are the check, as without a checkout.
+        A readable text file shorter than the cited range, or a file the head commit doesn't have
+        at all, drops the citation."""
         cited = _shown_in_diff(self._index, proposed)
         if cited is None:
             self._drop("not_in_diff")
             return None
-        count = self._line_count(cited.path)
-        if count is None or cited.end_line > count:
+        if self._missing_at_head(cited):
             self._drop("missing_at_head")
             return None
         return cited
@@ -180,7 +186,7 @@ class CheckoutCitationChecker(_DropCounter):
         if not self._is_head(proposed.commit):
             return "wrong_commit", None
         try:
-            entry = self._reader.file(proposed.path)
+            entry = self._reader.file(_real_path(self._index, proposed.path))
         except UnsafePathError:
             return "unsafe_path", None
         if entry is None or entry.kind != "text":
@@ -203,11 +209,17 @@ class CheckoutCitationChecker(_DropCounter):
         """The head commit, in full or as a prefix of at least 7 hex digits. Never another commit."""
         return bool(_COMMIT_PREFIX.fullmatch(commit)) and self._head_sha.startswith(commit.lower())
 
-    def _line_count(self, path: str) -> int | None:
+    def _missing_at_head(self, cited: DiffCitation) -> bool:
         try:
-            return self._reader.line_count(path)
+            entry = self._reader.file(cited.path)
         except UnsafePathError:
-            return None
+            entry = None
+        if entry is None:
+            return cited.path not in self._skipped
+        if entry.kind != "text":
+            return False
+        count = self._reader.line_count(entry.path)
+        return count is None or cited.end_line > count
 
 
 def _quote_matches(quote: str, cited_lines: list[str]) -> bool:
@@ -218,11 +230,17 @@ def _quote_matches(quote: str, cited_lines: list[str]) -> bool:
     return len(wanted) <= MAX_QUOTE_CHARS and wanted in normalise_quote("\n".join(cited_lines))
 
 
+def _real_path(index: ShownIndex, path: str) -> str:
+    """The model may cite a path as the evidence showed it, escaped; map that to the real one.
+    Every escape holds a backslash, which no path the checkout accepts does, so this can't misread.
+    """
+    return index.displayed_paths.get(path, path)
+
+
 def _shown_in_diff(index: ShownIndex, proposed: ProposedDiffCitation) -> DiffCitation | None:
-    """The model may cite a path as the evidence showed it, escaped; map that to the real one."""
     path = proposed.path
     if path not in index.head_lines:
-        path = index.displayed_paths.get(path, path)
+        path = _real_path(index, path)
     lines = index.head_lines.get(path)
     start, end = proposed.start_line, proposed.end_line
     if not lines or start < 1 or end < start or end - start + 1 > len(lines):

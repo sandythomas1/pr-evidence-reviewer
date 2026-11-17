@@ -15,7 +15,8 @@ from tests.evidence.test_builder import CLAIM, FILES, at_head
 from tests.review.builders import HEAD_SHA, TEST_PATCH, changed_file, check, snapshot
 
 UNAVAILABLE = (
-    f"The repository at {HEAD_SHA[:7]} couldn't be read, so only the diff and CI checks were used."
+    f"The repository at {HEAD_SHA[:7]} couldn't be read, so only the diff and CI checks were used. "
+    "Code and tests outside the diff weren't checked."
 )
 DIFF_ONLY = "\n".join(
     [

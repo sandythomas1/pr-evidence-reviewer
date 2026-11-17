@@ -77,7 +77,18 @@ def _clear_cache(settings: Settings, *, include_packets: bool) -> int:
         print(str(error), file=sys.stderr)
         return 1
     print(_cleared_message(result, include_packets=include_packets))
+    if result.failed:
+        print(_not_cleared_message(result.failed), file=sys.stderr)
+        return 1
     return 0
+
+
+def _not_cleared_message(failed: int) -> str:
+    copies = "copy" if failed == 1 else "copies"
+    return (
+        f"Couldn't delete {failed} saved repository {copies}. "
+        "Close any program using the cache folder and run the command again."
+    )
 
 
 def _cleared_message(result: ClearResult, *, include_packets: bool) -> str:

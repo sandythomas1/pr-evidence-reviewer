@@ -9,11 +9,10 @@ With no checkout (`reader=None`) the packet holds only the diff and CI checks, w
 so. A gap is never approval: it names evidence the model didn't see.
 """
 
-import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from pr_evidence_reviewer.checkout.reader import CheckoutReader
+from pr_evidence_reviewer.checkout.reader import CheckoutReader, UnsafePathError
 from pr_evidence_reviewer.domain.claims import Claim
 from pr_evidence_reviewer.domain.evidence import (
     MAX_SHOWN_SYMBOL_LINES,
@@ -39,6 +38,7 @@ from pr_evidence_reviewer.evidence.diff import (
     parse_hunks,
     touches_ci_config,
 )
+from pr_evidence_reviewer.evidence.escape import inline
 from pr_evidence_reviewer.evidence.queries import (
     ClaimQueries,
     definition_name,
@@ -50,17 +50,26 @@ from pr_evidence_reviewer.evidence.test_mapping import MappedTests, map_tests
 
 MAX_NAMED_FILES = 20
 MAX_SHOWN_LINE_CHARS = 240
+# A claim statement quoted in an evidence gap is cut to this many characters.
+MAX_QUOTED_STATEMENT_CHARS = 80
 # Rough rendering overhead per shown line (gutter, separators), so the budget tracks the text sent.
 _LINE_OVERHEAD = 10
 
-# Skip reasons that hide a file's content at the head commit. When the pull request changed the
-# file, or a claim points at it, the verdict may miss something (C5). Binary, LFS and link entries
-# have nothing to read anyway, and the diff already says what changed in them.
-_INCOMPLETE_REASONS = frozenset({"export_ignored", "too_large", "unverified", "undecodable"})
+# Skip reasons that hide content a claim could be checked against at the head commit. When the pull
+# request changed the file, or a claim points at it, the verdict may miss something (C5, review
+# L2-1). Binary, submodule and link entries have no text to check a claim against, and the diff
+# already says what changed in them, so they get a visible gap only.
+_INCOMPLETE_REASONS = frozenset(
+    {"export_ignored", "too_large", "unverified", "undecodable", "unsafe_name", "lfs"}
+)
+# Skip reasons that mean a file wasn't fetched or couldn't be confirmed to match the commit.
+_NOT_FETCHED_REASONS = frozenset({"export_ignored", "unverified"})
 _SKIP_PHRASES = {
-    "export_ignored": "it's left out of GitHub's download of the repository",
+    "export_ignored": (
+        "the repository's .gitattributes leaves it out of GitHub's download (export-ignore)"
+    ),
     "too_large": "it's too large",
-    "unverified": "its content couldn't be checked against the commit",
+    "unverified": "its content couldn't be confirmed to match this commit",
     "undecodable": "it isn't UTF-8 text",
     "binary": "it's a binary file",
     "lfs": "it's stored in Git LFS",
@@ -272,7 +281,7 @@ class _Repository:
         found: dict[tuple[str, str], Symbol | None] = {}
         for path, hunk, parsed in kept:
             lines = parsed.added_lines or parsed.head_lines
-            if not lines or not supports(path) or not self.reader.has(path):
+            if not lines or not supports(path) or not _has(self.reader, path):
                 continue
             lookup = self.symbols.enclosing(path, min(lines))
             _symbol_skip_gaps(lookup, gaps)
@@ -295,12 +304,13 @@ class _Repository:
         self, corpus: search.Corpus, queries: Sequence[str], gaps: _Gaps
     ) -> search.SearchResult:
         result = search.search_literal(self.reader, corpus, queries, limits=self.search_limits)
-        unique = len(dict.fromkeys(query for query in queries if query.strip()))
-        dropped = unique > self.search_limits.max_queries
         for limitation in result.limitations:
-            incomplete = dropped or bool(result.timed_out)
-            kind: GapKind = "search_timeout" if "out of time" in limitation else "search_limit"
-            gaps.add(kind, limitation, limitation=True, incomplete=incomplete)
+            gaps.add(
+                limitation.kind,
+                limitation.message,
+                limitation=True,
+                incomplete=limitation.incomplete,
+            )
         return result
 
     def definitions(
@@ -458,7 +468,7 @@ def _checks(snapshot: PullRequestSnapshot, max_checks: int, gaps: _Gaps) -> tupl
 def _checkout_unavailable(head_sha: str, problem: str | None, gaps: _Gaps) -> None:
     message = (
         f"The repository at {head_sha[:7]} couldn't be read, so only the diff and CI checks were "
-        "used."
+        "used. Code and tests outside the diff weren't checked."
     )
     if problem:
         message = f"{message} {problem}"
@@ -482,14 +492,22 @@ def _skip_gaps(corpus: search.Corpus, reader: CheckoutReader, gaps: _Gaps) -> No
     for limitation in corpus.limitations:
         gaps.add("search_limit", limitation, limitation=True, incomplete=True)
     if reader.refetch_capped:
-        ignored = sum(1 for skip in reader.skipped() if skip.reason == "export_ignored")
+        ignored = sum(1 for skip in reader.skipped() if skip.reason in _NOT_FETCHED_REASONS)
         gaps.add(
-            "export_ignored",
-            "Too many files are left out of GitHub's download of this repository to fetch them "
-            f"one by one. Not read: {_count(ignored, 'file')}.",
-            limitation=True,
-            incomplete=True,
+            "export_ignored", _refetch_capped_message(ignored), limitation=True, incomplete=True
         )
+
+
+def _refetch_capped_message(ignored: int) -> str:
+    if ignored == 1:
+        return (
+            "1 file wasn't read: the repository's .gitattributes leaves it out of GitHub's "
+            "download (export-ignore), and there are too many such files to fetch one by one."
+        )
+    return (
+        f"{ignored} files weren't read: the repository's .gitattributes leaves them out of "
+        "GitHub's download (export-ignore), and there are too many to fetch one by one."
+    )
 
 
 def _symbol_skip_gaps(lookup: SymbolLookup, gaps: _Gaps) -> None:
@@ -523,7 +541,8 @@ def _test_mapping(mapping: MappedTests, max_chars: int, gaps: _Gaps) -> tuple[Te
     if cut:
         _budget_gap(
             gaps,
-            f"The test mapping is too long to show in full. Not shown: {_count(cut, 'file')}.",
+            "Too many tests were found to check them all. "
+            f"Not checked: the tests for {_count(cut, 'changed file')}.",
         )
     return tuple(kept)
 
@@ -536,8 +555,8 @@ def _symbols_within(
     if cut:
         _budget_gap(
             gaps,
-            "The code around the changes is too long to show in full. "
-            f"Not shown: {_count(cut, 'definition')}.",
+            "The code around the changes is too long to check in full. "
+            f"Not checked: {_functions_or_classes(cut)}.",
         )
     return dict(kept)
 
@@ -598,8 +617,8 @@ def _claim_picks(
         if dropped:
             _budget_gap(
                 gaps,
-                f"The evidence for claim {_inline(claim.id)} is too long to show in full. "
-                f"Not shown: {_count(dropped, 'item')}.",
+                f"Too much code was found for the claim “{_short_statement(claim.statement)}” "
+                f"to check it all. Not checked: {_results_and_definitions(dropped)}.",
                 claim_id=claim.id,
             )
         symbols = [item.symbol for item in chosen if item.symbol is not None]
@@ -704,8 +723,25 @@ def _ref(symbol: Symbol | None) -> SymbolRef | None:
     )
 
 
-def _symbol_order(symbol: Symbol) -> tuple[str, int, str, int, str]:
-    return (symbol.path, symbol.start_line, symbol.name, symbol.end_line, symbol.qualified_name)
+def _symbol_order(symbol: Symbol) -> tuple[str, int, str, int, str, str]:
+    """Total over every field a symbol shows, so ties never fall back to set order (AC7)."""
+    return (
+        symbol.path,
+        symbol.start_line,
+        symbol.name,
+        symbol.end_line,
+        symbol.qualified_name,
+        symbol.kind,
+    )
+
+
+def _has(reader: CheckoutReader, path: str) -> bool:
+    """Whether the checkout holds `path`. A name it refuses as unsafe is simply not there; the
+    skip record for it is a gap (review CR1)."""
+    try:
+        return reader.has(path)
+    except UnsafePathError:
+        return False
 
 
 def _check_order(check: CheckResult) -> tuple[str, str, str, str, str]:
@@ -747,6 +783,23 @@ def _count(number: int, noun: str) -> str:
     return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
 
 
+def _functions_or_classes(number: int) -> str:
+    return "1 function or class" if number == 1 else f"{number} functions or classes"
+
+
+def _results_and_definitions(number: int) -> str:
+    if number == 1:
+        return "1 search result or definition"
+    return f"{number} search results and definitions"
+
+
+def _short_statement(statement: str) -> str:
+    """A claim statement (PR-author text) cut to about 80 characters, escaped for one line."""
+    if len(statement) > MAX_QUOTED_STATEMENT_CHARS:
+        statement = statement[: MAX_QUOTED_STATEMENT_CHARS - 1].rstrip() + "…"
+    return _inline(statement)
+
+
 def _inline(text: str) -> str:
     """Escape line breaks and other control characters so a name can't start a new line."""
-    return json.dumps(text, ensure_ascii=False)[1:-1]
+    return inline(text)

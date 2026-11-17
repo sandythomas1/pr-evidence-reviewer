@@ -86,7 +86,7 @@ function DiffCitationItem({
   const label = (
     <>
       <code>{citation.path}</code>, {lineRange(citation)}
-      {citation.kind === "code" && " (unchanged code)"}
+      {citation.kind === "code" && " (repository code)"}
     </>
   );
   if (!url) return <li>{label}</li>;

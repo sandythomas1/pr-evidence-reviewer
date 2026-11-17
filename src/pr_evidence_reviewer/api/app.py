@@ -63,13 +63,15 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # The cache's asyncio locks belong to the running loop, so it's built here, not above.
+        packets = PacketStore(settings.packets_dir, ttl=settings.retention_ttl)
         app.state.checkouts = CheckoutCache(
             settings.cache_dir,
             archive_source or GitHubArchiveSource(GhCliTokenProvider()),
             max_bytes=settings.checkout_cache_max_bytes,
-            ttl=settings.checkout_ttl,
+            ttl=settings.retention_ttl,
+            also_retain=packets.remove_expired_if_due,
         )
-        app.state.packets = PacketStore(settings.packets_dir)
+        app.state.packets = packets
         yield
 
     app = FastAPI(title="PR Evidence Reviewer", version=__version__, lifespan=lifespan)

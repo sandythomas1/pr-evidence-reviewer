@@ -456,3 +456,37 @@ def test_download_tokens_never_reach_the_response_or_the_logs(
     for sentinel in SENTINELS:
         assert sentinel not in response.text
         assert sentinel not in logged
+
+
+def test_a_second_review_at_the_same_commit_reuses_the_checkout_and_the_packet() -> None:
+    """AC1 and AC7 end to end: one download per head commit, the same packet bytes each time."""
+    archive = FakeArchiveSource(HEAD_FILES)
+    reply = {"assessments": [assessment("c1")]}
+    client = make_client(refund_pull_request(), FakeProvider(reply, reply), archive=archive)
+
+    first = review_refund(client)
+    second = review_refund(client)
+
+    assert (archive.tree_calls, archive.download_calls) == (1, 1)
+    assert archive.blob_requests == []
+    assert re.fullmatch(r"[0-9a-f]{64}", first["packet_hash"])
+    assert second["packet_hash"] == first["packet_hash"]
+    [stored] = (_Apps.root / "data" / "packets").rglob("*.json")
+    assert stored.name == f"{first['packet_hash']}.json"
+
+
+def test_the_model_reads_the_repository_evidence_from_the_packet() -> None:
+    """AC9: the prompt carries the test mapping, the search hit and the definition, gutter-numbered."""
+    provider = FakeProvider({"assessments": [assessment("c1")]})
+    client = make_client(refund_pull_request(), provider)
+
+    review_refund(client)
+
+    [request] = provider.requests
+    prompt = request.user_content
+    evidence = prompt[prompt.index("Tests for the changed source files:") :]
+    assert "- src/refunds.py (Python): changed tests: tests/test_refunds.py" in evidence
+    assert '--- src/refunds.py:4 (search term "refund_once") ---' in evidence
+    assert "Definition: --- function refund_once in src/refunds.py, lines 4-7 ---" in evidence
+    assert "      4 | def refund_once(order):" in evidence
+    assert "      7 |     return order.refund()" in evidence

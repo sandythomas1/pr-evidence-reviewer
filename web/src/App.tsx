@@ -51,7 +51,7 @@ function announcement(state: State): string {
       const count = state.claims.claims.claims.length;
       const found = `Loaded ${name}. Found ${String(count)} ${count === 1 ? "claim" : "claims"}.`;
       if (state.verdicts.kind === "loading")
-        return `${found} Checking them against the code and the CI checks…`;
+        return `${found} Checking them against the diff, the repository's code and tests, and the CI checks. This can take a few minutes…`;
       if (state.verdicts.kind === "error") return `${found} They couldn't be checked.`;
       if (state.verdicts.kind === "loaded")
         return `${found} ${verdictSummary(state.verdicts.verdicts)}`;

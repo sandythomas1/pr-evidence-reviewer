@@ -76,15 +76,15 @@ A standard review gives the model one evidence packet for the PR's head commit:
 To get the repository's files, the runner downloads GitHub's archive of the head commit and checks every
 file against the commit's file list ([ADR 0003](docs/decisions/0003-checkout-from-github-archive.md)). It
 doesn't use git and never runs the repository's code. The first review of a commit can take minutes for a
-large repository; later reviews of the same commit reuse the download. If the repository can't be read,
+large repository; later reviews of the same commit reuse the saved copy. If the repository can't be read,
 the review uses only the diff and CI checks, says so, and marks the evidence incomplete.
 
 ### What's kept on your computer
 
 | What | Where | How long |
 |---|---|---|
-| Repository downloads | `checkouts` in the cache folder | removed after 7 days unused, and least recently used first once they pass 2 GiB, while `prev` runs |
-| Evidence packets | `packets` in the data folder | until you clear them |
+| Saved repository copies | `checkouts` in the cache folder | Removed after 7 days unused, or sooner, least recently used first, once they pass 2 GiB. Removal only happens while `prev` is running. |
+| Evidence packets | `packets` in the data folder | Removed after 7 days. Removal only happens while `prev` is running. |
 
 | | Cache folder | Data folder |
 |---|---|---|
@@ -92,10 +92,10 @@ the review uses only the diff and CI checks, says so, and marks the evidence inc
 | macOS | `~/Library/Caches/pr-evidence-reviewer` | `~/Library/Application Support/pr-evidence-reviewer` |
 | Linux | `~/.cache/pr-evidence-reviewer` | `~/.local/share/pr-evidence-reviewer` |
 
-Repository downloads can hold private source code. To delete them now:
+Saved repository copies can hold private source code. To delete them now:
 
 ```sh
-uv run prev cache clear             # delete repository downloads
+uv run prev cache clear             # delete saved repository copies
 uv run prev cache clear --packets   # also delete saved evidence packets
 ```
 

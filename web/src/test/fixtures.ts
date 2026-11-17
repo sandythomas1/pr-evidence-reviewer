@@ -131,12 +131,14 @@ export function makeVerdictSet(overrides: Partial<VerdictSet> = {}): VerdictSet 
         edge_cases: [],
         dropped_citations: 1,
         notes: [
-          "1 citation was left out because it doesn't point to lines shown in the evidence or to a CI check.",
+          "1 citation was left out because it couldn't be confirmed against the code or CI checks at this commit, so it isn't listed as evidence.",
         ],
       },
     ],
     dropped_citations: 1,
-    notes: ["1 citation in all was left out because it didn't match the evidence or a CI check."],
+    notes: [
+      "1 citation in all was left out because it couldn't be confirmed against the code or CI checks at this commit.",
+    ],
     scope_limitations: [],
     provider: "claude_code",
     model: "claude-opus-5-5",

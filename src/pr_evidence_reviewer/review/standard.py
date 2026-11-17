@@ -14,7 +14,11 @@ from collections.abc import Callable
 
 from pr_evidence_reviewer.checkout.archive import RepoName
 from pr_evidence_reviewer.checkout.cache import CheckoutCache, CheckoutTarget
-from pr_evidence_reviewer.checkout.reader import CheckoutReader, CheckoutReadError
+from pr_evidence_reviewer.checkout.reader import (
+    CheckoutReader,
+    CheckoutReadError,
+    UnsafePathError,
+)
 from pr_evidence_reviewer.domain.claims import Claim
 from pr_evidence_reviewer.domain.evidence import EvidencePacket
 from pr_evidence_reviewer.domain.pull_request import PullRequestSnapshot, split_repo_full_name
@@ -42,10 +46,19 @@ from pr_evidence_reviewer.review.verdicts import (
 
 logger = logging.getLogger(__name__)
 
-NOT_SAVED_NOTE = "The evidence for this review couldn't be saved on this computer."
+NOT_SAVED_NOTE = (
+    "The evidence for this review couldn't be saved on this computer. The verdicts aren't affected."
+)
+CHANGED_WHILE_READING = (
+    "The saved copy of the repository changed while it was being read, for example because it was "
+    "cleared. Run the review again to include the repository's code."
+)
+UNSAFE_NAME = "A file in the repository has a name the reviewer can't read safely."
 
 # Errors from fetching or reading the checkout. Each carries a fixed, user-safe message.
 _CHECKOUT_ERRORS = (CheckoutUnavailableError, RepositoryTooLargeError, GitHubAuthError)
+# Errors from reading a published checkout mid-review: the review falls back to the diff.
+_READ_ERRORS = (CheckoutReadError, UnsafePathError)
 
 
 class StandardReview:
@@ -77,8 +90,12 @@ class StandardReview:
                     packet = await asyncio.to_thread(
                         build_packet, snapshot, reader, sent, self._budgets
                     )
-                except CheckoutReadError:
-                    logger.warning("Reviewing without the repository", extra={"reason": "read"})
+                except _READ_ERRORS as error:
+                    problem = _read_problem(error)
+                    logger.warning(
+                        "Reviewing without the repository",
+                        extra={"reason": type(error).__name__},
+                    )
                 else:
                     return await self._review(claims, sent, packet, reader)
         except _CHECKOUT_ERRORS as error:
@@ -106,16 +123,24 @@ class StandardReview:
         )
         try:
             verdicts = await asyncio.to_thread(verdict_set, claims, sent, result, packet, checker)
-        except CheckoutReadError:
+        except _READ_ERRORS as error:
             # The cached copy changed under the lease (another process cleared it). Check the
             # citations against the diff and CI only, and say the evidence is incomplete.
-            logger.warning("Checking citations without the repository", extra={"reason": "read"})
+            logger.warning(
+                "Checking citations without the repository",
+                extra={"reason": type(error).__name__},
+            )
             verdicts = verdict_set(
                 claims, sent, result, packet, SnapshotCitationChecker(shown), incomplete=True
             )
         if saved:
             return verdicts
         return verdicts.model_copy(update={"notes": [*verdicts.notes, NOT_SAVED_NOTE]})
+
+
+def _read_problem(error: CheckoutReadError | UnsafePathError) -> str:
+    """The user-safe reason for a gap; the error's own text is internal and never shown."""
+    return UNSAFE_NAME if isinstance(error, UnsafePathError) else CHANGED_WHILE_READING
 
 
 def checkout_target(snapshot: PullRequestSnapshot) -> CheckoutTarget:

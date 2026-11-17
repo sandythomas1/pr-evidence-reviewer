@@ -170,13 +170,14 @@ async def test_a_verdict_whose_citations_all_fail_is_downgraded_to_insufficient_
     assert downgraded.notes == [
         "The model judged this claim contradicted without a citation that checks out against the "
         "evidence, so it's marked as insufficient evidence.",
-        "3 citations were left out because they don't point to lines shown in the evidence or to "
-        "a CI check.",
+        "3 citations were left out because they couldn't be confirmed against the code or CI "
+        "checks at this commit, so they aren't listed as evidence.",
     ]
     assert result.verdicts[1].status == "supported"
     assert result.dropped_citations == 3
     assert result.notes == [
-        "3 citations in all were left out because they didn't match the evidence or a CI check."
+        "3 citations in all were left out because they couldn't be confirmed against the code or "
+        "CI checks at this commit."
     ]
 
 
@@ -206,8 +207,8 @@ async def test_one_bad_citation_is_dropped_and_the_verdict_stands_on_the_rest() 
     assert kept.citations == [DiffCitation(path="src/upload.py", start_line=1, end_line=1)]
     assert kept.dropped_citations == 1
     assert kept.notes == [
-        "1 citation was left out because it doesn't point to lines shown in the evidence or to a "
-        "CI check."
+        "1 citation was left out because it couldn't be confirmed against the code or CI checks "
+        "at this commit, so it isn't listed as evidence."
     ]
     assert result.verdicts[1].status == "insufficient_evidence"
     assert result.verdicts[1].notes == []
@@ -433,7 +434,10 @@ async def test_a_budget_cut_is_a_scope_limitation_and_cut_lines_cannot_be_cited(
     assert result.verdicts[0].status == "insufficient_evidence"
     assert result.verdicts[0].dropped_citations == 1
     assert result.verdicts[1].status == "supported"
-    assert result.verdicts[1].notes == ["Some changes weren't checked, so this may be incomplete."]
+    assert result.verdicts[1].notes == [
+        "Some evidence wasn't checked (see “Not checked” above), so this support may be incomplete. "
+        "Look at those gaps before you rely on it."
+    ]
 
 
 async def test_logs_count_what_was_dropped_but_never_the_text(
@@ -574,7 +578,10 @@ async def test_a_supported_verdict_says_it_may_be_incomplete_when_changes_were_n
 
     supported, unsure = result.verdicts
     assert supported.status == "supported"
-    assert supported.notes == ["Some changes weren't checked, so this may be incomplete."]
+    assert supported.notes == [
+        "Some evidence wasn't checked (see “Not checked” above), so this support may be incomplete. "
+        "Look at those gaps before you rely on it."
+    ]
     assert unsure.notes == []
 
 

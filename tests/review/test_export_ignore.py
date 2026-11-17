@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from pr_evidence_reviewer.checkout.cache import CheckoutCache
+from pr_evidence_reviewer.checkout.archive import BlobStore
+from pr_evidence_reviewer.checkout.cache import CACHE_UNWRITABLE, CheckoutCache
 from pr_evidence_reviewer.checkout.reader import CheckoutReader
 from pr_evidence_reviewer.domain.claims import Claim
 from pr_evidence_reviewer.domain.evidence import EvidencePacket
@@ -83,7 +84,10 @@ async def test_a_mass_export_ignore_is_refetched_up_to_the_cap_and_marked(tmp_pa
     assert ignored == [f"pkg/m{n:03d}.py" for n in range(REFETCH_CAP - 1, REFETCH_CAP + 5)]
     [capped] = [gap for gap in packet.gaps if gap.kind == "export_ignored"]
     assert capped.path is None
-    assert capped.message.endswith("Not read: 6 files.")
+    assert capped.message == (
+        "6 files weren't read: the repository's .gitattributes leaves them out of GitHub's "
+        "download (export-ignore), and there are too many to fetch one by one."
+    )
     assert capped.message in packet.scope_limitations
     assert packet.evidence_incomplete
     [verdict] = verdicts.verdicts
@@ -102,7 +106,8 @@ async def test_a_changed_file_that_cant_be_read_alone_marks_the_evidence(tmp_pat
     [gap] = [gap for gap in packet.gaps if gap.kind == "skipped_files"]
     assert gap.path == CHANGED
     assert (
-        gap.message == f"{CHANGED} wasn't read: its content couldn't be checked against the commit."
+        gap.message
+        == f"{CHANGED} wasn't read: its content couldn't be confirmed to match this commit."
     )
     assert gap.message in packet.scope_limitations
     assert not any(gap.kind == "export_ignored" for gap in packet.gaps)
@@ -124,3 +129,28 @@ async def test_a_complete_download_needs_no_refetch_and_no_warning(tmp_path: Pat
     [verdict] = verdicts.verdicts
     assert verdict.status == "supported"
     assert INCOMPLETE_NOTE not in verdict.notes
+
+
+async def test_a_refetched_file_that_cant_be_saved_falls_back_to_the_diff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review S11: a disk error while storing a refetched file makes the repository unavailable,
+    so the review uses the diff and CI checks and says why, instead of failing."""
+
+    def disk_full(*args: object) -> None:
+        raise OSError("disk full")
+
+    snap = changed_upload()
+    source = FakeArchiveSource(head_files(snap), archive=make_archive([]))
+    monkeypatch.setattr(BlobStore, "add", disk_full)
+
+    verdicts, packet = await review(tmp_path, source, snap)
+
+    assert source.blob_requests
+    assert packet.snapshot.checkout_status == "unavailable"
+    [gap] = [gap for gap in packet.gaps if gap.kind == "checkout_unavailable"]
+    assert gap.message.endswith(CACHE_UNWRITABLE)
+    assert packet.evidence_incomplete
+    [verdict] = verdicts.verdicts
+    assert verdict.status == "supported"
+    assert INCOMPLETE_NOTE in verdict.notes

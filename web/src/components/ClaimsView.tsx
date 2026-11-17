@@ -61,7 +61,7 @@ function VerdictsSummary({ verdicts }: { verdicts: VerdictsState }) {
     return (
       <p className="hint">
         Checking each claim against the diff, the repository&apos;s code and tests, and the CI
-        checks. The first review of a repository can take a few minutes…
+        checks. The first review of a commit can take a few minutes…
       </p>
     );
   }
@@ -77,10 +77,11 @@ function VerdictsSummary({ verdicts }: { verdicts: VerdictsState }) {
   return (
     <>
       <p className="hint">
-        Each verdict covers only what was checked at this commit: the diff, a search of the
-        repository&apos;s code, its tests, the functions and classes around each change, and the CI
-        checks. Reading code can&apos;t prove how it runs, and a test isn&apos;t proof that it ran.
-        You make the approval decision.
+        Each verdict covers only the evidence the reviewer could read at this commit: the diff and
+        the CI checks, plus, when the repository could be read, a search of its code, its tests, and
+        the functions and classes around each change. Anything under “Not checked” wasn&apos;t used.
+        Reading code can&apos;t prove how it runs, and a test isn&apos;t proof that it ran. You make
+        the approval decision.
       </p>
       {notes.map((note) => (
         <p key={note} className="note">

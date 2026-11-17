@@ -60,8 +60,10 @@ putting the checkout in `github/` (ties cache and safety policy to the transport
 4. Each file is hashed as a git blob (`sha1(b"blob %d\0"+data)`, `usedforsecurity=False`). A match is written to
    `blobs/<sha>` (`open(..., "xb")`, 0o600; an existing blob is reused, so identical files dedupe). Missing
    (`export-ignore`) or altered (`export-subst`, `eol`, `ident`) files are refetched via `GET …/git/blobs/{sha}`
-   (sha validated `^[0-9a-f]{40}$`, base64 decoded, re-verified; cap 300, concurrency 8). Anything past the cap or
-   still unverified is skipped (`export_ignored` / `unverified`) and raises `evidence_incomplete` (C5, T8).
+   (sha validated `^[0-9a-f]{40}$`, base64 decoded, re-verified; cap 300 blobs and 128 MiB in total, concurrency
+   8; each blob is verified and written to the blob store as it arrives, never held all in memory). Anything past
+   the count cap is skipped as `export_ignored`, past the byte cap or still unverified as `unverified`, and either
+   raises `evidence_incomplete` (C5, T8).
 5. If the base repo 404s a fork's head SHA, retry on the snapshot's new optional `head_repo` (`head.repo.full_name`,
    validated with the existing owner/repo regexes); the result is still verified against `snapshot.head.sha`.
 
@@ -88,10 +90,13 @@ files (path, size, blob_sha, kind `text|binary|lfs|undecodable`) and sorted `ski
 valid only if the manifest parses and its sha, owner and repo equal the request (T9 marker); else it is removed and
 refetched.
 
-**Retention: LRU + 7-day TTL (L2-2).** Each acquire does `os.utime(last_used)`. At startup and after each publish:
+**Retention: LRU + 7-day TTL (L2-2).** Each acquire does `os.utime(last_used)`. At startup and on every lease (review S4):
 evict unleased entries whose `last_used` is older than **7 days**, then the oldest unleased while the manifests'
 `total_bytes` sum exceeds `checkout_cache_max_bytes` (default **2 GiB**). An expired entry found on acquire is
-evicted and refetched. TTL runs only while `prev` runs; `prev cache clear` is the immediate control.
+evicted and refetched. Stored packets get the same 7-day TTL (review S9, one shared retention
+setting): a packet written more than **7 days** ago is removed by the same pass, before each packet save
+and on every lease; removal never follows a link and a linked packets root is refused. TTL runs
+only while `prev` runs; `prev cache clear` (`--packets` for packets) is the immediate control.
 *Rejected:* filesystem atime (off on noatime/relatime, unreliable on NTFS).
 
 **Eviction (T11).** The victim path is built from the key and must have `checkouts/` as its parent; it is renamed to
@@ -206,8 +211,12 @@ claim-id order. The **builder** cuts, so the stored packet is exactly what the m
 and adds a `budget_cut` gap naming the claim and what was dropped.
 
 **`evidence_incomplete` (C5).** True when any of: a budget cut (as today); the checkout is unavailable; the refetch
-cap fired; a PR-changed file is skipped (any reason); a claim-relevant file is skipped (named by a claim's path
-query, or a likely-test candidate). `INCOMPLETE_NOTE` still applies to supported verdicts.
+cap fired; a PR-changed file or a claim-relevant file (named by a claim's path query, or a likely-test
+candidate) is skipped for a reason that hides content a claim could be checked against: `export_ignored`,
+`too_large`, `unverified`, `undecodable`, `unsafe_name` or `lfs`. `binary`, `submodule` and `link` skips get a
+visible gap only, so the warning doesn't land on every PR that touches an image (amended per review L2-1).
+The refetch byte cap (128 MiB, `ArchiveLimits.max_refetch_bytes`) counts as the refetch cap firing (review S1).
+`INCOMPLETE_NOTE` still applies to supported verdicts.
 
 **Render (T10).** Pure `render_packet(packet) -> (text, ShownIndex)`. Sections: head commit; CI checks; gaps; diff
 (today's gutter plus `in function foo (10–42)` on hunk headers); test mapping; per claim "Repository evidence for

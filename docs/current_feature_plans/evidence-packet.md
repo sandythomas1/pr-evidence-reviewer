@@ -1,5 +1,5 @@
 # Evidence packet (Week 2: #12–#17)
-Branch: feature/2-evidence-packet · Lead run: 2026-11-16 · Status: framing
+Branch: feature/2-evidence-packet · Lead run: 2026-11-16 · Status: ready (PR into dev; task 41 waits on Linux/macOS CI)
 Intent: standard review builds a deterministic, stored evidence packet from a read-only checkout at the
 head SHA (search, test mapping, symbols, CI, gaps), and every model citation is validated against that
 checkout. ACs: spec.md AC1–AC9.

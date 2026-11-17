@@ -126,3 +126,81 @@ token, path traversal, ReDoS), domain (evidence-gap semantics, verdict downgrade
 - B4 hit maxTurns a second time, again with no report. Lead check: tasks 30–35 are [x]; the suite is green with 882
   passed and 3 skipped; 86 entries in porcelain. 36–40 remain. Task 42 (lessons) moves to the Lead (§9: the Lead owns
   memory writes). Second continuation sent, scoped to 36–40 only.
+- B4 DONE (#16). Tree **215f5f24386d04f93b8d9dc0254bfd256d1abfc7**. The Lead re-ran: 901 passed, 3 skipped. ruff,
+  black and mypy are clean, and the tree hash matches. The diff against dev is 92 files, +11 476 / −754.
+- Deviations (L1, recorded; none changes an AC):
+  - Degraded mode skips repo search, and test mapping covers changed files only.
+  - PacketStore is rooted at `packets_dir`.
+  - New NOT_SAVED_NOTE.
+  - A CheckoutReadError during the citation check falls back to SnapshotCitationChecker, plus incomplete.
+  - ClaimAssessor is split.
+  - Every scope limitation is also a gap.
+  - Unchanged, unnamed export-ignored files are covered only by the aggregate refetch-cap gap.
+- Phase 4 summary: 4 fresh implementer dispatches and 5 continuations. Every batch hit the 60-turn cap at least once.
+
+## Phase 5: Targeted verification (the diff implicates security, UI copy, and a large cross-cutting change)
+- qa-tester: *Proves AC1–AC9 with evidence independent of the implementers (task 41 traceability, verification.md),
+  closes coverage gaps, and captures screenshots of the changed verdict and claims screens.* Pending.
+- security-reviewer (audit): *Mandatory. The diff adds the trust boundary for untrusted repository bytes and the gh
+  token on a new network path (codeload), plus private source persisted on disk. It audits the code against the
+  T1–T11 mitigations claimed in plan.md.* Pending.
+- critic (review): *Large, high-consequence diff (11k lines, replaces the evidence path for every verdict). It gives an
+  independent correctness read for silent false-"supported" paths, a gap treated as approval, and nondeterminism,
+  which tests written by the same implementers can miss.* Pending.
+- ux-language-advocate: deferred until QA screenshots exist, so it reviews real screens rather than strings.
+- QA stopped at maxTurns (40) with no report, so the result is PARTIAL (L0). Continued with SendMessage and asked it to
+  report early.
+- critic returned REQUEST CHANGES. One BLOCKING (CR1, an UnsafePathError crash becomes a 500) and nine NON-BLOCKING,
+  all recorded in review.md. No silent false "supported" was found, and every deviation was accepted.
+- Its two L2 candidates are resolved as L1 because existing rules answer them (C4 shown ⇒ citable; gap ≠ approval).
+  Neither goes to Sandy.
+- The fix round is held until the security audit returns, so one implementer round covers both (the cap is 2 rounds).
+- security-reviewer returned FINDINGS with nothing blocking: one MEDIUM (S1, refetch memory) and seven LOW, recorded in
+  review.md. It wrote no file, since audit mode writes nothing, so the Lead recorded the findings. pip-audit was refused
+  by the classifier; the Lead did not retry it.
+- S8 (Python 3.12.12 or later) deferred to a follow-up issue (L1). Packet retention is a real L2: three specialists
+  raised it independently, and it is a privacy policy question. It goes to Sandy while the fix round runs.
+- Fix round 1, fresh implementer: *Fixes CR1 (blocking) and CR2–CR7, CR10, S1–S7 in one round, with regression
+  tests.* Pending.
+- architect re-check: skipped. The deviations are local and are listed above; there is no structural departure from D1–D8.
+- DECISION NEEDED (packet retention). Sandy, verbatim: "7 days, like checkouts (Recommended)". Added to fix round 1 as
+  S9: the packet store gets the same 7-day TTL as checkouts.
+- QA returned PARTIAL: 905 passed / 3 skipped, full gate green (Windows only), 9/9 ACs proven, 4 gap tests staged,
+  verification.md written. D1 (T10 gutter bypass) is the same as S2, already in the fix round. No screenshots
+  (Playwright isn't installed), so the Lead captures them after the fix round in case copy changes. Task 41 `[~]` until
+  CI runs on Linux and macOS.
+- The implementer hit maxTurns (60) without reporting, so the result is PARTIAL (L0). Continued with SendMessage, with
+  S9 added and an instruction to report early.
+- Fix round 1 DONE: CR1–CR10, S1–S7, S9 and L2-1 fixed, each with a regression test the implementer ran against the
+  pre-fix index. The Lead re-ran the gate: 945 passed / 4 skipped, ruff, black and mypy clean, tree
+  6a33c40d955ede379e7907674126cbb83c0658a0 matches. The only subprocess calls in src/ are the existing token.py and
+  llm/process.py, which this diff doesn't touch.
+- CR2 interpretation accepted (L1): a path absent from the head tree and not skipped stays `missing_at_head`.
+- Settings rename `checkout_ttl` → `retention_ttl`: the Lead fixes tasks.md line 28.
+- Scoped re-checks (round 1 of 2), continued with SendMessage:
+  - critic: *Did the CR1/CR2/CR7 fixes close the failures without opening a new path to a false "supported" or a
+    500?*
+  - security-reviewer: *Do the S1 streaming refetch and the new S9 packet deletion code hold T6/T9/T11 (no link
+    following, no deletion outside the packets root)?*
+- The Lead captured 2 screenshots (specs/evidence-packet/screenshots/), using a stand-in runner with fictional data.
+  Port 8799 belonged to an unrelated local app, so it moved to 8811. Servers stopped and the tab closed afterwards.
+- ux-language-advocate (review): *Does the new user-visible copy (the checking, loaded, dropped and incomplete notes, the
+  checkout gap, the cache clear errors and the README retention row) read in the reviewer's language and set honest
+  expectations?* Dispatched.
+- Security re-audit round 1: CLEAR (no blocking). New LOW S10, S11, S12.
+- Critic re-check round 1: APPROVE. New NB CR11 (sweep runs on every save).
+- ux-language-advocate review: CHANGES_NEEDED. BLOCKING U1 (INCOMPLETE_NOTE understates the gap), U2 (scope sentence
+  claims a repository search during the diff-only fallback), U3 ("unchanged code" label). NB U4–U14. Lead accepted all
+  (review.md). The round-1 implementer isn't resumable after the crash and compaction, so it gets a fresh dispatch.
+- implementer, fix round 2 of 2 (the last), fresh: *Closes the 3 UX blocking items plus S10–S12, CR11 and U4–U14,
+  so nothing open stays in review.md at ship.* Dispatched.
+- implementer round 2 stopped at its 60-turn limit (PARTIAL). Continued with SendMessage.
+- Fix round 2: DONE after one continuation. Tree f9d4429187b68ee7cd1bf439407e1c3cb4e24fd7.
+  Lead independent check: pytest 956 passed / 4 skipped; ruff, black and mypy clean; web lint, format, typecheck,
+  test 79/79 and build all green. Lead read the round-2 diff for S10, S11, S12, CR11, U1, U2 and U7: matches the
+  dispositions. Implementer deviation accepted (L1): S11 is wrapped in cache.py, not archive.py, to avoid a
+  circular import.
+- Screenshots re-captured (01, 02 with a realistic "Not checked" list, new 03 for the repository-unreadable fallback).
+  The stand-in carries the backend's exact strings.
+- ux-language-advocate (scoped re-check, continued): *Did the round-2 copy close U1–U3 as shown in the new
+  screenshots, without opening a new misleading state?* Dispatched.
