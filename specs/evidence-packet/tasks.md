@@ -97,11 +97,11 @@
   responsiveness); a literal on a 3 000-char line is never matched; a tracked file listed in `.gitignore` is found;
   a PR-changed file in `dist/` and `vendor/` is found, an unchanged one is not; caps hold in path order; same inputs
   twice → identical results. (dep: 17) @qa · #13 AC4 · T5, T8, C5, C8 · plan: D3
-- [ ] 19. `evidence/test_mapping.py`: an extensible conventions table for Python, JS/TS, Go, Java/Kotlin, C#, Ruby, Rust
+- [x] 19. `evidence/test_mapping.py`: an extensible conventions table for Python, JS/TS, Go, Java/Kotlin, C#, Ruby, Rust
   (name/dir patterns → candidate test paths checked against the manifest or changed files); changed tests reported;
   untested source → `no_test_found`; docs/config/lockfiles never gaps; works on changed-file data alone when the
   checkout is unavailable. Nothing executed. (dep: 9, 16) [P with 17, 21] @implementer · #14 AC5 · plan: D5 schema (TestMapping), D8
-- [ ] 20. @qa AC5 table test: one case per ecosystem (source → test file), a changed test, an untested file → gap, a
+- [x] 20. @qa AC5 table test: one case per ecosystem (source → test file), a changed test, an untested file → gap, a
   README/config change → no gap, `subprocess.Popen` patched to raise. (dep: 19) @qa · #14 AC5 · plan: Testing Strategy
 - [ ] 21. `evidence/symbols.py` (only importer of tree-sitter): per-language node-type tables — Python
   function/class (widened to `decorated_definition`); JS/TS function, generator, (abstract) class declarations,
