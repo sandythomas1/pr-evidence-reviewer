@@ -1,5 +1,6 @@
 """Builds PR snapshots for review tests without going through the GitHub client."""
 
+import re
 from typing import Any
 
 from pr_evidence_reviewer.domain.pull_request import (
@@ -9,6 +10,8 @@ from pr_evidence_reviewer.domain.pull_request import (
     PullRequestRef,
     PullRequestSnapshot,
 )
+from pr_evidence_reviewer.evidence.builder import build_packet
+from pr_evidence_reviewer.evidence.render import ShownIndex, render_packet
 
 HEAD_SHA = "a" * 40
 BASE_SHA = "b" * 40
@@ -68,3 +71,33 @@ def snapshot(
     }
     fields.update(overrides)
     return PullRequestSnapshot(**fields)
+
+
+_HUNK = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+
+def head_files(snap: PullRequestSnapshot) -> dict[str, bytes]:
+    """Head-side file contents consistent with each changed file's patch: the context and added
+    lines at their head line numbers, blank lines elsewhere. Removed files aren't at head."""
+    files: dict[str, bytes] = {}
+    for changed in snap.files:
+        if changed.status == "removed":
+            continue
+        lines: dict[int, str] = {}
+        number = 0
+        for line in (changed.patch or "").splitlines():
+            header = _HUNK.match(line)
+            if header:
+                number = int(header.group(1))
+            elif line.startswith(("+", " ")) and number:
+                lines[number] = line[1:]
+                number += 1
+        last = max(lines, default=1)
+        text = "".join(lines.get(n, "") + "\n" for n in range(1, last + 1))
+        files[changed.path] = text.encode()
+    return files
+
+
+def shown_for(snap: PullRequestSnapshot) -> ShownIndex:
+    """What a diff-only packet for `snap` shows the model."""
+    return render_packet(build_packet(snap, None, []))[1]

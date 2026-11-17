@@ -47,6 +47,15 @@ class CheckoutReader:
     def head_sha(self) -> str:
         return self._manifest.sha
 
+    @property
+    def tree_sha(self) -> str:
+        return self._manifest.tree_sha
+
+    @property
+    def refetch_capped(self) -> bool:
+        """True when more files were missing from the archive than could be fetched one by one."""
+        return self._manifest.refetch_capped
+
     def files(self) -> tuple[ManifestFile, ...]:
         """Every stored file, sorted by path."""
         return self._manifest.files

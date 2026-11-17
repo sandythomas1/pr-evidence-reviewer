@@ -18,15 +18,15 @@ from pr_evidence_reviewer.domain.verdicts import (
     ProposedCodeCitation,
     ProposedDiffCitation,
 )
+from pr_evidence_reviewer.evidence.render import ShownIndex
 from pr_evidence_reviewer.review.citations import (
     CheckoutCitationChecker,
     SnapshotCitationChecker,
 )
-from pr_evidence_reviewer.review.evidence import EvidenceIndex, build_evidence
 from pr_evidence_reviewer.review.verdicts import check_assessments
 from tests.checkout.fakes import HEAD_SHA
 from tests.evidence.helpers import reader_for
-from tests.review.builders import snapshot
+from tests.review.builders import shown_for, snapshot
 
 UPLOAD = "".join(f"line {n} of the upload client\n" for n in range(1, 31)).encode()
 FILES = {
@@ -55,12 +55,12 @@ def reader(tmp_path_factory: pytest.TempPathFactory) -> CheckoutReader:
     return reader_for(tmp_path_factory.mktemp("checkout"), FILES)
 
 
-def index() -> EvidenceIndex:
-    return build_evidence(snapshot(head=CommitRef(ref="feature/retry", sha=HEAD_SHA))).index
+def index() -> ShownIndex:
+    return shown_for(snapshot(head=CommitRef(ref="feature/retry", sha=HEAD_SHA)))
 
 
 def checker(
-    reader: CheckoutReader, shown: Shown | None = None, idx: EvidenceIndex | None = None
+    reader: CheckoutReader, shown: Shown | None = None, idx: ShownIndex | None = None
 ) -> CheckoutCitationChecker:
     return CheckoutCitationChecker(reader, HEAD_SHA, shown, index=idx or index())
 

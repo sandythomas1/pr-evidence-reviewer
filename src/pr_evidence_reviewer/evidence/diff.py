@@ -37,6 +37,7 @@ CI_CONFIG_LIMITATION = (
 class Hunk:
     text: str
     head_lines: frozenset[int]
+    added_lines: frozenset[int] = frozenset()
 
 
 def is_low_value(path: str) -> bool:
@@ -87,6 +88,7 @@ def _render_hunk(header: re.Match[str], body: list[str]) -> Hunk:
     new_left = int(header.group(3) or 1)
     lines = [f"@@ +{next_line} @@{header.group(4)}"]
     numbers: set[int] = set()
+    added: set[int] = set()
     for raw in body:
         if old_left <= 0 and new_left <= 0:
             break
@@ -97,8 +99,10 @@ def _render_hunk(header: re.Match[str], body: list[str]) -> Hunk:
         elif marker in " +" and new_left > 0:
             lines.append(f"{next_line:>{_GUTTER}} {marker} {content}")
             numbers.add(next_line)
+            if marker == "+":
+                added.add(next_line)
             next_line += 1
             new_left -= 1
             if marker == " ":
                 old_left -= 1
-    return Hunk(text="\n".join(lines), head_lines=frozenset(numbers))
+    return Hunk(text="\n".join(lines), head_lines=frozenset(numbers), added_lines=frozenset(added))

@@ -23,7 +23,7 @@ from pr_evidence_reviewer.domain.verdicts import (
     ProposedCodeCitation,
     ProposedDiffCitation,
 )
-from pr_evidence_reviewer.review.evidence import EvidenceIndex
+from pr_evidence_reviewer.evidence.render import ShownIndex
 
 CheckOutcome = Literal["passed", "failed"]
 DropReason = Literal[
@@ -104,7 +104,7 @@ class SnapshotCitationChecker(_DropCounter):
     """Checks citations against the diff hunks and CI checks in the evidence packet. Without a
     checkout there's nothing to check code against, so no code citation checks out."""
 
-    def __init__(self, index: EvidenceIndex) -> None:
+    def __init__(self, index: ShownIndex) -> None:
         super().__init__()
         self._index = index
 
@@ -139,7 +139,7 @@ class CheckoutCitationChecker(_DropCounter):
         head_sha: str,
         shown: ShownLines | None,
         *,
-        index: EvidenceIndex,
+        index: ShownIndex,
     ) -> None:
         if not _HEAD_SHA.fullmatch(head_sha) or head_sha != reader.head_sha:
             raise ValueError("The checkout isn't at the head commit being reviewed.")
@@ -218,7 +218,7 @@ def _quote_matches(quote: str, cited_lines: list[str]) -> bool:
     return len(wanted) <= MAX_QUOTE_CHARS and wanted in normalise_quote("\n".join(cited_lines))
 
 
-def _shown_in_diff(index: EvidenceIndex, proposed: ProposedDiffCitation) -> DiffCitation | None:
+def _shown_in_diff(index: ShownIndex, proposed: ProposedDiffCitation) -> DiffCitation | None:
     """The model may cite a path as the evidence showed it, escaped; map that to the real one."""
     path = proposed.path
     if path not in index.head_lines:
@@ -232,7 +232,7 @@ def _shown_in_diff(index: EvidenceIndex, proposed: ProposedDiffCitation) -> Diff
     return DiffCitation(path=path, start_line=start, end_line=end)
 
 
-def _checks_named(index: EvidenceIndex, proposed: ProposedCheckCitation) -> list[CheckCitation]:
+def _checks_named(index: ShownIndex, proposed: ProposedCheckCitation) -> list[CheckCitation]:
     """Every check with that name. Two checks can share a name, such as a run and a status."""
     return [
         CheckCitation(

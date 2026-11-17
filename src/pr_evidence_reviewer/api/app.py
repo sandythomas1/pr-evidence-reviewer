@@ -1,6 +1,8 @@
 """FastAPI application factory."""
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -11,7 +13,10 @@ from pr_evidence_reviewer.api import claims, snapshots, verdicts
 from pr_evidence_reviewer.api import providers as providers_api
 from pr_evidence_reviewer.api.errors import install_error_handlers
 from pr_evidence_reviewer.api.web import install_security_headers, mount_web_ui
+from pr_evidence_reviewer.checkout.cache import ArchiveSource, CheckoutCache
 from pr_evidence_reviewer.config import Settings
+from pr_evidence_reviewer.evidence.store import PacketStore
+from pr_evidence_reviewer.github.archive import GitHubArchiveSource
 from pr_evidence_reviewer.github.client import GitHubClient
 from pr_evidence_reviewer.github.token import GhCliTokenProvider
 from pr_evidence_reviewer.llm.base import LLMProvider
@@ -49,11 +54,25 @@ def create_app(
     settings: Settings | None = None,
     snapshot_source: snapshots.SnapshotSource | None = None,
     providers: list[LLMProvider] | None = None,
+    archive_source: ArchiveSource | None = None,
 ) -> FastAPI:
     """Build the app. Tests pass their own settings and dependencies."""
     quiet_http_loggers()
     settings = settings or Settings()
-    app = FastAPI(title="PR Evidence Reviewer", version=__version__)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # The cache's asyncio locks belong to the running loop, so it's built here, not above.
+        app.state.checkouts = CheckoutCache(
+            settings.cache_dir,
+            archive_source or GitHubArchiveSource(GhCliTokenProvider()),
+            max_bytes=settings.checkout_cache_max_bytes,
+            ttl=settings.checkout_ttl,
+        )
+        app.state.packets = PacketStore(settings.packets_dir)
+        yield
+
+    app = FastAPI(title="PR Evidence Reviewer", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.state.snapshot_source = snapshot_source or GitHubClient(GhCliTokenProvider())
     app.state.providers = (

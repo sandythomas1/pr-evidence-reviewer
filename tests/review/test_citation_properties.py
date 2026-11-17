@@ -34,10 +34,9 @@ from pr_evidence_reviewer.review.citations import (
     ShownLines,
     normalise_quote,
 )
-from pr_evidence_reviewer.review.evidence import build_evidence
 from pr_evidence_reviewer.review.verdicts import check_assessments
 from tests.checkout.fakes import FakeArchiveSource, publish
-from tests.review.builders import BASE_SHA, snapshot
+from tests.review.builders import BASE_SHA, shown_for, snapshot
 
 # Mixed letters and digits, so upper-casing a prefix actually changes it.
 HEAD = "0123456789abcdef0123456789abcdef01234567"
@@ -55,7 +54,7 @@ def make_reader(root: Path, files: Mapping[str, bytes]) -> CheckoutReader:
 def make_checker(
     reader: CheckoutReader, shown: ShownLines | None = None
 ) -> CheckoutCitationChecker:
-    index = build_evidence(snapshot(head=CommitRef(ref="feature", sha=HEAD))).index
+    index = shown_for(snapshot(head=CommitRef(ref="feature", sha=HEAD)))
     return CheckoutCitationChecker(reader, HEAD, shown, index=index)
 
 

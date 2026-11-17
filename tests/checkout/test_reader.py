@@ -191,3 +191,10 @@ def test_any_accepted_path_resolves_only_to_its_exact_manifest_key(
     assert (entry is not None) == (path in FILES)
     if entry is not None:
         assert entry.path == path
+
+
+def test_reports_the_tree_and_whether_refetching_was_capped(checkout: Checkout) -> None:
+    reader = CheckoutReader(checkout)
+
+    assert reader.tree_sha == checkout.manifest.tree_sha
+    assert reader.refetch_capped is False

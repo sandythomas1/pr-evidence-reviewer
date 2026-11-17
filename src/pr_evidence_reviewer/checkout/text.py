@@ -6,7 +6,7 @@ start an extra empty line. `str.splitlines()` must never be used for repository 
 on `\\r`, U+2028, U+0085, `\\v` and `\\f`, which would shift line numbers.
 """
 
-_UTF8_BOM = "﻿"
+_UTF8_BOM = "\ufeff"
 
 
 def decode_strict(data: bytes) -> str | None:

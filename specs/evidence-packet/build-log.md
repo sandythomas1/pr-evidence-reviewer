@@ -102,3 +102,27 @@ token, path traversal, ReDoS), domain (evidence-gap semantics, verdict downgrade
   → insufficient evidence" against the checkout (T7, C4), plus the dropped-citation UI count.* Pending.
 - B3 stopped at maxTurns (60) with no report, so the result is PARTIAL (L0). Continued with SendMessage. Pending.
   Third batch in a row to hit 60 turns, so the batches are sized too large for the turn cap. Lesson candidate.
+- B3 DONE (#17). Tree **fb69c8c9286a439b564ac82b98338fa6efd20eaf**. The Lead re-ran: 832 passed, 3 skipped. ruff
+  and mypy are clean; web has 79 tests passing and typecheck is clean.
+- Deviations (L1):
+  - No `maxLength` on `quote` in the schema, because Codex's strict structured output is believed to reject it. The
+    500-character cap is enforced in the checker, and a guard test is added.
+  - `le=10**7` on the diff line fields too.
+  - `CheckoutCitationChecker(reader, head_sha, shown, *, index)`.
+  - A per-reason drop log with no paths or quotes.
+- User-visible: VerdictView code-citation label; ClaimsView copy; App status line; backend notes now say "evidence".
+  ux-language-advocate is routed for Phase 5.
+- Stopgap prompt line: "leave code_citations empty". Task 33 must replace it. Interim inconsistency: the UI copy
+  describes repo search before #16 wires it. Acceptable because #16 ships in the same PR.
+- Carry-forward to B4:
+  - `ShownIndex` must implement `is_shown(path, line)`.
+  - `StandardReview` must catch `CheckoutReadError` → diff fallback with a gap.
+  - `checkout/text.py` `_UTF8_BOM` is a literal invisible char; make it `"﻿"`.
+- B4 implementer (#16, tasks 30–40 and 42; task 41 goes to QA), fresh dispatch: *Wires the checkout, search, symbols
+  and citation validator into one deterministic, stored packet used by StandardReview (AC5–AC9, T10, C5).*
+  Expected to need a SendMessage continuation (13 tasks).
+- B4 stopped at maxTurns (60) with no report, as expected, so the result is PARTIAL (L0). Continued with SendMessage.
+  Pending.
+- B4 hit maxTurns a second time, again with no report. Lead check: tasks 30–35 are [x]; the suite is green with 882
+  passed and 3 skipped; 86 entries in porcelain. 36–40 remain. Task 42 (lessons) moves to the Lead (§9: the Lead owns
+  memory writes). Second continuation sent, scoped to 36–40 only.

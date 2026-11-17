@@ -22,6 +22,7 @@ def test_numbers_every_head_side_line_and_leaves_removed_lines_unnumbered() -> N
         "      4   x",
     ]
     assert hunk.head_lines == frozenset({1, 2, 3, 4})
+    assert hunk.added_lines == frozenset({2, 3})
 
 
 def test_lines_before_the_first_hunk_header_are_skipped() -> None:
